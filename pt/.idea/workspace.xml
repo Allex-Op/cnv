@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/../BIT/StatisticsBranch.java" beforeDir="false" afterPath="$PROJECT_DIR$/../BIT/StatisticsBranch.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../BIT/StatisticsTool.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/Instrumentation.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy.class" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
+  </component>
+  <component name="ProjectId" id="1rX7GdmNnHrxjROvufO3PXJN4jn" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+  </component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\penaa\Desktop\2SEM\CNV\cnv\CNV\pt\ulisboa\tecnico\cnv\BIT\BIT" />
+    </key>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="" />
+      <created>1619110487370</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1619110487370</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+</project>
