@@ -20,6 +20,11 @@ public class StatisticsTool
 			// Get Routines é a chamada a metodos
 			for (Enumeration e = ci.getRoutines().elements(); e.hasMoreElements(); ) {
 				Routine routine = (Routine) e.nextElement();
+
+				// We do not want to instrument the constructor
+				if(routine.getMethodName().equals("<init>"))
+					continue;
+
 				routine.addBefore("StatisticsTool", "dynMethodCount", new Integer(1));
 
 				InstructionArray instructions = routine.getInstructionArray();
@@ -35,18 +40,23 @@ public class StatisticsTool
 					}
 				}
 
+				String name_output_file = ci.getSourceFileName()+"_"+routine.getMethodName();
+				routine.addAfter("StatisticsTool", "printDynamic", name_output_file);
 			}
 
-			ci.addAfter("StatisticsTool", "printDynamic", "null");
+			//ci.addAfter("StatisticsTool", "printDynamic", "null");
 			ci.write(out_file);
 		}
 	
     public static synchronized void printDynamic(String foo) 
 		{
+			if(!foo.contains("solve"))
+				return;
+
 			try {
 				System.out.println("Writing stats...");
 
-				BufferedWriter out = new BufferedWriter(new FileWriter("/home/vagrant/cnv/CNV/stats.txt"));				
+				BufferedWriter out = new BufferedWriter(new FileWriter("/home/vagrant/cnv/CNV/"+foo+"_analysis.txt"));				
 
 				out.write("Dynamic information summary:");
 				out.write("\nNumber of methods:      " + dyn_method_count);

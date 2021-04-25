@@ -2,10 +2,14 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/../BIT/StatisticsBranch.java" beforeDir="false" afterPath="$PROJECT_DIR$/../BIT/StatisticsBranch.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../BIT/StatisticsTool.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/Instrumentation.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/StatisticsTool.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/StatisticsTool.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/StatisticsTool.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/StatisticsTool.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy_old_non_instrumented.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../stats.txt" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
