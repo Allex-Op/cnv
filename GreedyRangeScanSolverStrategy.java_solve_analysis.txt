@@ -1,5 +1,0 @@
-Dynamic information summary:
-Number of methods:      5
-Number of basic blocks: 9498629
-Number of executed instructions: 23336987
-Total number of branches to check:2113907

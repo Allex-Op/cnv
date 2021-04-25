@@ -23,6 +23,11 @@ import pt.ulisboa.tecnico.cnv.solver.SolverFactory;
 
 import javax.imageio.ImageIO;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+
+import pt.ulisboa.tecnico.cnv.BIT.*;
+
 public class WebServer {
 
 	static ServerArgumentParser sap = null;
@@ -95,7 +100,6 @@ public class WebServer {
 				newArgs.add("-d");
 			}
 
-
 			// Store from ArrayList into regular String[].
 			final String[] args = new String[newArgs.size()];
 			int i = 0;
@@ -103,13 +107,11 @@ public class WebServer {
 				args[i] = arg;
 				i++;
 			}
-
 			/*
 			for(String ar : args) {
 				System.out.println("ar: " + ar);
-			} */
-
-
+			}
+			*/
 
 			// Create solver instance from factory.
 			final Solver s = SolverFactory.getInstance().makeSolver(args);
@@ -122,8 +124,11 @@ public class WebServer {
 			// Write figure file to disk.
 			File responseFile = null;
 			try {
-
+				// solve problem
 				final BufferedImage outputImg = s.solveImage();
+
+				// Log the metrics generated
+				logMetrics(newArgs, Thread.currentThread().getId());
 
 				final String outPath = WebServer.sap.getOutputDirectory();
 
@@ -149,13 +154,8 @@ public class WebServer {
 				e.printStackTrace();
 			}
 
-
-
 			// Send response to browser.
 			final Headers hdrs = t.getResponseHeaders();
-
-			
-
 			hdrs.add("Content-Type", "image/png");
 
 			hdrs.add("Access-Control-Allow-Origin", "*");
@@ -168,13 +168,35 @@ public class WebServer {
 			final OutputStream os = t.getResponseBody();
 			Files.copy(responseFile.toPath(), os);
 
-
 			os.close();
-
 			System.out.println("> Sent response to " + t.getRemoteAddress().toString());
 		}
+
+		// Logs the metrics obtained from instrumenting the solve strategy
+		private void logMetrics(ArrayList<String> newArgs, Long currThread) {
+			try {
+				System.out.println("Writing stats..." + newArgs);
+				PerThreadStats stats = StatisticsTool.getThreadStats(currThread.toString());
+
+				if(stats == null) {
+					System.out.println("Couldn't get the metrics for this request, an error ocurred.");
+					return;
+				}
+
+				BufferedWriter out = new BufferedWriter(new FileWriter("/home/vagrant/cnv/CNV/"+currThread+"_analysis.txt"));
+
+				out.write("Dynamic information summary for thread:" + currThread);
+				out.write("\nNumber of basic blocks: " + stats.dyn_bb_count);
+				out.write("\nNumber of executed instructions: " + stats.dyn_instr_count);
+				out.write("\nTotal number of branches to check:" + stats.branch_checks);
+				out.close();
+
+				StatisticsTool.removeThreadStats(currThread.toString());
+			} catch (Exception e) {
+				System.out.println("An error occurred.");
+				e.printStackTrace();
+			}
+		}
 	}
-
-
 
 }
