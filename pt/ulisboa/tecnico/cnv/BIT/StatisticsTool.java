@@ -42,7 +42,6 @@ public class StatisticsTool {
 		}
 
 	public static PerThreadStats getThreadStats(String threadId) {
-		System.out.println("Obtaining metrics of thread:" + threadId);
 		return stats.get(threadId);
 	}
 
@@ -65,9 +64,10 @@ public class StatisticsTool {
 
     public static synchronized void analysisInit(String foo)
 		{
+			// putIfAbsent - used because instrumented functions can call for the same thread other functions and lose data
+
 			String threadId = new Long(Thread.currentThread().getId()).toString();
-			System.out.println("Creating new mectrics store for thread:" + threadId);
-			stats.put(threadId, new PerThreadStats());
+			stats.putIfAbsent(threadId, new PerThreadStats());
 		}
 	
 	public static void printUsage() {
