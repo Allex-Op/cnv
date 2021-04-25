@@ -3,9 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,7 +21,7 @@
   <component name="PropertiesComponent">
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../../../teacher-project/EC2LaunchWaitTerminate.java" />
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
