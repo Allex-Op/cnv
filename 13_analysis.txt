@@ -1,4 +1,0 @@
-Dynamic information summary for thread:13
-Number of basic blocks: 67698
-Number of executed instructions: 231392
-Total number of branches to check:16145
