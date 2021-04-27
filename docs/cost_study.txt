@@ -1,0 +1,94 @@
+==== GridAlgorithm Tests: ====
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (75 pedidos 100 segundos 100%)
+
+Dynamic information summary for thread:19
+Number of basic blocks: 2097721
+Number of executed instructions: 6098669
+Total number of branches to check: 903278
+
+max_cost = 592 891 875
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=128&y0=0&y1=128&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (15 pedidos 66 segundos 100%)
+
+Dynamic information summary for thread:18
+Number of basic blocks: 9221305
+Number of executed instructions: 26371693
+Total number of branches to check: 3831214
+
+max_vm = 510 511 815
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (5 pedidos e explode-se todo)
+
+Dynamic information summary for thread:17
+Number of basic blocks: 9343545
+Number of executed instructions: 26021051
+Total number of branches to check: 3668852
+
+max_vm = 133 435 020
+
+
+
+=== Greedy Algorithm Tests: ====
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (100 pedidos aguenta bem 70%~ 54 segundos)
+.
+Dynamic information summary for thread:15
+Number of basic blocks: 88915
+Number of executed instructions: 308725
+Total number of branches to check:21558
+
+max_vm = 35 184 100
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=1024&h=1024&x0=256&x1=768&y0=256&y1=768&xS=512&yS=512&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_1024x1024_4.png" (80 pedidos chegou a 99.9% em  76 segundos)
+
+Dynamic information summary for thread:20
+Number of basic blocks: 132011
+Number of executed instructions: 459896
+Total number of branches to check: 32029
+
+max_vm = 41 916 320
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png" (1 pedido chega a 100% e demora 2 mins e 11segundos)
+
+Dynamic information summary for thread:16
+Number of basic blocks: 25651973
+Number of executed instructions: 87507053
+Total number of branches to check:6082868
+
+max_vm = 99 672 789 (X)
+
+
+
+
+==== Progressive Algorithm Tests: ====
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (100 pedidos chega 70% e demorou 67 segundos)
+
+Dynamic information summary for thread:20
+Number of basic blocks: 110326
+Number of executed instructions: 387307
+Total number of branches to check: 28291
+
+max_vm = 44 388 900
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=1024&h=1024&x0=256&x1=768&y0=256&y1=768&xS=512&yS=512&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_1024x1024_4.png" (80 pedidos demorou 85 segundos 100% cpu)
+
+Dynamic information summary for thread:21
+Number of basic blocks: 144266
+Number of executed instructions: 506461
+Total number of branches to check: 36981
+
+max_vm = 46 433 840
+
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png" (1 pedido 100% cpu em 3mins e 20 segundos)
+
+Dynamic information summary for thread:21
+Number of basic blocks: 37638116
+Number of executed instructions: 132138184
+Total number of branches to check: 9612932
+
+max_vm = 151 364 048 (X)
+
+
+==== RESULT ====
+
+max_vm = (35 184 100 + 41 916 320 + 44 388 900 + 46 433 840) / 4 = 41 980 790
+treshold = 39 000 000

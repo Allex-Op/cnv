@@ -1,0 +1,332 @@
+
+. A unica questão é o construtor do SolverFactory em termos de concorrência do web server, 2 threads podem ver o null vulnerabilidade: TOCTOU
+
+TODO List:
+    . Estrutura básica do AWS com o LB, Cluster e um Auto-Scaler básico (script)
+    . Decidir métricas a usar tendo em conta overhead que adicionam. (check lab4 tool "swiss-army knife")
+    . Instrumentação do código do projeto "Solver".
+    . Tornar multi concurrente o web server e a maneira como as tools são executadas (e.g. variaveis partilhadas)
+    . Implementação da recolha métricas (anotar argumentos usados no pedido HTTP) (deve ser feito pelo web server e n pelo instrumented code, para isso é necessário permitir acesso)
+    . Implementação de heuristicas no auto-scaler de acordo com métricas recolhidas.
+
+
+Métricas:
+. Granularidade Basic Block 
+- Number of dynamic called bbl's & bbl instructions 
+- Branches taken
+- Memory accesses
+
+
+Possíveis bottlenecks para instrumentar:
+(e.g. number of bytecode instructions
+or basic blocks executed, data accesses, number of function calls executed, invocation stack depth
+
+
+
+request que vêm para o load balancer:
+wiedth: 1024
+height: 1024
+chosen_map_image: SIMPLE_VORON...
+viewport_top_left_x: 650
+viewport_top_left_y: 550
+viewport_bottom_right_x: 1000
+viewport_bottom_right_y: 990
+starting_point_x: 690
+starting_point_y: 700
+
+(export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server", classpath precisa ter definida a diretoria da tool + apanhar BIT)
+(source ./java-config-rnl-vm.sh -> necessário para a instrumentação funcionar)
+java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000
+ab -n 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+javac pt/ulisboa/tecnico/cnv/server/StatisticsTool.java (classpath precisa apanhar a folder BIT)
+java StatisticsTool pt/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy_non_instrumented.class  pt/ulisboa/tecnico/cnv/solver/GridScanSolverStrategy.class 
+java StatisticsTool pt/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy_non_instrumented.class  pt/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class 
+java StatisticsTool pt/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy_non_instrumented.class  pt/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class 
+
+Tests:
+Low entrypy images:
+
+View port 50x50:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 2048 -h 2048 -x0 0 -x1 50 -y0 0 -y1 50 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 2048 -h 2048 -x0 0 -x1 50 -y0 0 -y1 50 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 2048 -h 2048 -x0 0 -x1 50 -y0 0 -y1 50 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+
+
+View port 256x256:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 2048 -h 2048 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 2048 -h 2048 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 2048 -h 2048 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+
+
+View port 512x512:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 2048 -h 2048 -x0 0 -x1 512 -y0 0 -y1 512 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 2048 -h 2048 -x0 0 -x1 512 -y0 0 -y1 512 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 2048 -h 2048 -x0 0 -x1 512 -y0 0 -y1 512 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+
+
+View port 1024x1024:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 2048 -h 2048 -x0 0 -x1 1024 -y0 0 -y1 1024 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 2048 -h 2048 -x0 0 -x1 1024 -y0 0 -y1 1024 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 2048 -h 2048 -x0 0 -x1 1024 -y0 0 -y1 1024 -i 'datasets/SIMPLE_VORONOI_2048x2048_1.png' -yS 25 -xS 25 -o $HOME
+
+
+High entropy images:
+View port 256x256:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 1024 -h 1024 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 1024 -h 1024 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 1024 -h 1024 -x0 0 -x1 256 -y0 0 -y1 256 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 25 -xS 25 -o $HOME
+
+View port 1024x1024:
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GRID_SCAN -w 1024 -h 1024 -x0 0 -x1 1020 -y0 0 -y1 1020 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 25 -xS 25 -o $HOME 
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s PROGRESSIVE_SCAN -w 1024 -h 1024 -x0 0 -x1 1020 -y0 0 -y1 1020 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 25 -xS 25 -o $HOME
+java pt.ulisboa.tecnico.cnv.solver.SolverMain -d -s GREEDY_RANGE_SCAN -w 1024 -h 1024 -x0 0 -x1 1020 -y0 0 -y1 1020 -i 'datasets/SIMPLE_VORONOI_1024x1024_4.png' -yS 250 -xS 250 -o $HOME
+
+
+
+-x0 -x1 -y0 -y1 viewport coordinates
+-yS -xS starting point
+
+# em termos de processamento, n em termos de quanto tempo demora ou falta para acabar
+maximo_vm_peso: 100 //total capacidade que a vm aguenta a processar
+
+algoritmo_grid_viewport_64 = 1.4
+algoritmo_grid_viewport_128 = 7
+algoritmo_grid_viewport_1024 = 100 
+algoritmo_grid_viewport_256 = 25
+algoritmo_grid_viewport_512 = 100
+
+algoritmo_greedy_viewport_256 = 1
+algoritmo_greedy_viewport_512 = 1.25
+algoritmo_greedy_viewport_1024 = 100
+
+algoritmo_progressive_viewport_256 = 1 
+algoritmo_progressive_viewport_512 = 1.25
+algoritmo_progressive_viewport_1024 = 100
+
+.
+    Algoritmo Grid: (e.g. métricas para um pedido viewport 256 alg grid) (não são realmente as métricas do pedido são um exemplo)
+    Dynamic information summary:
+    Number of methods:      28
+    Number of basic blocks: 1441898
+    Number of executed instructions: 5393362
+    Total number of branches to check:352122
+
+    Sabemos que para o algoritmo Grid um pedido com viewport 256 ocupa 25% da capacidade de processamento da VM.
+
+    Custo execução uma instrução: 1
+    Custo execução um branch: 2
+    Então podemos concluir que: 5393362 * 1 + 352122 * 2 = 6097606 (custo em métricas de 25% processamento da VM)
+
+    Logo, 100% da VM ou a capacidade da VM é 6097606*4 = 24390424 (aproximadamente, mas podemos definir um treshold de 2000000 para dar margem de erro)
+
+    Algoritmo Greedy: (e.g. métricas, n verdadeiras, para execução greedy do mesmo pedido com mesmos argumentos)
+    Number of methods:      14
+    Number of basic blocks: 60000
+    Number of executed instructions: 25000
+    Total number of branches to check:150000
+
+    Sabemos que o mesmo pedido para algoritmo greedy ocupa por volta de 1% do cpu de acordo com os nossos testes.
+
+    Custo do pedido: 25000 * 1 + 150000* 2 = 325000
+
+
+    QUando o loadbalancer recebe pedido ele sabe quantos pedidos estão a executar naquela VM porque mantêm track.
+    Exemplo sabe que a maquina tem capacidade de 2000000 e esta a executar 1600000.
+
+    Se receber pedido Grid procura o mais semelhante (anterior 6097606) e calcula que a VM n tem capacidade, mas dps
+    verifica se algum pedido que libere essa capacidade esta quase a acabar, se sim pode mandar se não, tem que enviar para outra VM 
+    mais livre.
+
+    Se receber pedid Greedy procura o mais semelhante (anterior 325000) e calcula que a VM aguenta 1600000+325000 < 2000000, logo 
+    pode enviar. (mesmo que passe slightly da margem, n a problema pq isto é um treshold e sabemos que a VM ainda vai aguentar mais um bocado)
+
+    Ainda podemos fazer correções do peso dos pedidos anteriores com o viewport como sabemos que viewports maiores vão originar
+    custos maiores.
+.
+
+Function for grid after the breakout point (64-256):Y = 0.1325*X - 8.215 (para baixo de 63 é negligivel ficando 0.256? valor de y(64))
+Function for grid after the breakout point (256): Y = 0.2930*X - 50.00 (x=171 is equal to 0,1)
+Function for gredy and progressive after the breakout point (512): Y = 0.1929*X - 97.50
+
+
+GridAlgorithm Tests: (lixo meter na firewall a bloquear isto)
+ab -n 75 -c 5 -s 500 "http://18.224.246.27:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png" (75 pedidos 100 segundos 100%)
+http://18.224.246.27:8000/scan?w=512&h=512&x0=0&x1=128&y0=0&y1=128&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png (15 pedidos 66 segundos 100%)
+http://3.16.165.112:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png (5 pedidos e explode-se todo)
+http://3.16.165.112:8000/scan?w=1024&h=1024&x0=256&x1=768&y0=256&y1=768&xS=512&yS=512&s=GRID_SCAN&i=SIMPLE_VORONOI_1024x1024_4.png (1 pedido 100% cpu mas rapidamente)
+http://3.16.165.112:8000/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=GRID_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png (1 pedido e morreu durante 5 minutos)
+
+
+Greedy Algorithm Tests:
+http://3.16.165.112:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_512x512_1.png (100 pedidos aguenta bem 70%~ 54 segundos)
+http://3.16.165.112:8000/scan?w=1024&h=1024&x0=256&x1=768&y0=256&y1=768&xS=512&yS=512&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_1024x1024_4.png (80 pedidos chegou a 99.9% em  76 segundos)
+http://3.16.165.112:8000/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png (1 pedido chega a 100% e demora 2 mins e 11segundos)
+
+Progressive Algorithm Tests:
+http://3.16.165.112:8000/scan?w=512&h=512&x0=128&x1=384&y0=138&y1=394&xS=256&yS=256&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_512x512_1.png (100 pedidos chega 70% e demorou 67 segundos)
+http://18.224.246.27:8000/scan?w=1024&h=1024&x0=256&x1=768&y0=256&y1=768&xS=512&yS=512&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_1024x1024_4.png (80 pedidos demorou 85 segundos 100% cpu)
+http://3.16.165.112:8000/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png (1 pedido 100% cpu em 3mins e 20 segundos)
+
+
+web_server esta a executar 1 pedido:
+total (50.000 bbls, 30.000 acessos a memoria, 10.000 if branches = custo)
+
+checkpoint qualquer de execução do pedido: 15.000 bbls , 5.000 acessos a memoria e 3000 if's
+
+
+- Mesmo a vm aguentando vários pedidos a thread pool esta limmitada e n vai executar todos concorrentemente
+
+// Algoritmo Load Balancer:
+total_possivel_da_vm = 100000; (obtido pelos estudos da vm)
+custo_do_pedido_semelhante = obter_do_mss(pedido_args)
+if(custo_do_pedido_semelhante < total_possivel_da_vm)
+    manda
+if else
+    verifica_se_algum_pedido_esta_quase_a_acabar(metricas)
+else nenhuma_vm_disponivel:
+    criar_vm()
+
+--------------------------------------- Calculo custos solução 1 ---------------------------------------
+.
+    Descrição: Solução geral que implica definir métricas gerais, independentemente do algoritmo.
+
+    Vantagens:
+    . Genérico, permite novos algoritmos.
+    . Menos complexidade. (hummm???)
+
+    Desvantagens:
+    . Solução Injusta e irrealista.
+
+
+    branches_taken: 300
+    memory_access: 10.000
+    dynamic_bbls_executed: 30.000
+
+    (escala custo 0-5)
+    custo_branch: 5
+    custo_memory_access: 3
+    custo_dynamic_bbl_executed: 2
+
+
+    grid_scan_cost = 4
+    progressive_scan_cost = 2
+    greedy_scan_cost = 3
+
+    Custo = 
+        branches_taken * custo_branch + 
+        memory_access * custo_memory_access + 
+        custo_dynamic_bbl_executed * custo_dynamic_bbl_executed
+
+
+--------------------------------------- Calculo custos solução 2 ---------------------------------------
+Descrição: Solução que implica definir métricas espécificas para cada algoritmo. O loadbalancer pode questionar as instâncias sobre as métricas de um pedido que esta a ser executado em 
+especifico. Consegue saber (ou estimular aproximadamente) quanto falta para este acabar comparando 
+com métricas salvas no MSS para pedidos com argumentos similares.
+
+
+Vantagens:
+. Custos de complexidade mais aproximados da realidade.
+
+Desvantagens:
+. Mais complexo
+. Estudo individual de cada algoritmo
+
+Métrics:
+. branches
+. dynamic bbl's executed
+
+GreedyScan Costs: 2
+ProgressiveScan costs: 3
+GridScan costs: 5
+
+PS: O greedy algorithm precisa de bastante memória no HEAP para realizar analise de imagens de grande resolução
+
+
+
+
+
+
+
+Notas:
+- Students should consider the usefulness/overhead trade-offs of all utilized metrics
+- continuously querying the storage system may eventually become a bottleneck for the load balancer component and resource overuse
+- The selected storage system can be updated directly or you may resort to some intermediate transfer mechanism.
+- The explicit duration (wall-clock time) of each request handled should not be considered or stored in the MSS
+- The load balancer can estimate the approximate complexity and workload of a request based on the
+request’s parameters combined with data previously stored in the MSS. The load balancer may know which
+servers are busy, how many and what requests there are currently executing, what the parameters of those
+requests are, their current progress and, conversely, how much work is left taking into account a cost estimate
+that was calculated when the request arrived.
+- Na figura o auto-scaler n comunica nem com o MSS nem com o load-balancer, ou seja
+ele so inicia novos nodes quando vê que todos estão cheios e mata cegamente?
+- As instancias EC2 salvam para o MSS as metricas ou localmente numa fase inicial.
+- O lb da query do MSS para verificar o "peso" de uma operação semelhante?
+- It is not very good design to tie the instrumentation tools to a specific task of your 
+project and making it instrument a specific method (.e., solver core) just to output metrics. 
+It should be your WebServer class to get these metrics from the tool classes and write them
+ to file (with the request parameters) and, later on, to cloud storage. 
+ Instrumentation code instruments and records metrics
+-Take into account that all threads will execute the same instrumented code (the analysis routines) and they are not ready for this as such. Moreover, the web server never exits so the code to print/output BIT tools statistics/metrics, as such will never print results, as they are code now.  You must handle this and obtain the metrics for each request from the BIT tools.
+
+
+Checkpoint delivery:
+For the initial checkpoint, students should submit the RadarScanner@Cloud system with a running and
+instrumented web server, load balancer and auto-scaler. Note that the algorithms for load balancing, autoscaling and the MSS need not be fully implemented at this stage (you can use AWS ELB and AutoScale
+and metrics can be stored temporarily in the computing nodes), but it is expected that some logic is already
+developed and, at the very least, they should be already thought out.
+
+
+Codigo disponibilizado:
+pasta org: 
+    - helper functions, não é necessário editar ou instrumentar. (Usado pelo solver code)
+
+pasta pt:
+    contém 3 java apps:
+        - solver: código a ser instrumentado, tem as implementações dos algoritmos
+        - web server: recebe pedidos http, parse argumentos e passa ao solver (endpoint "/scan")
+        - voronoi: map generator (?)
+
+
+web server: 
+    - endpoint scan da parse dos argumentos, cria solverfactory, chama solveImage() com os argumentos.
+    - solveImage() retorna uma imagem, essa imagem é enviada de volta como resposta HTTP com mais alguns headers...
+
+
+solver:
+    Solver s = SolverFactory.getInstance().makeSolver(args); -> cria objecto Solver com argumentos especificados (um deles é o algoritmo a executar)
+        - O objeto "solver" tem uma referência para um objeto SolverStrategy criado no makeSolver...
+
+    BufferedImage outputImg = s.solveImage();
+        - A função solveImage chama "this.strategy.solve(this)" para resolver
+            dps desenha a imagem, a bandeira em cima e retorna...
+
+
+    BufferedImage result = this.strategy.solve(this);
+        - Analisar os algoritmos e verificar as operações mais comuns ou pesadas?
+
+
+
+Algoritmos e uma análise extremamente naive:
+- ProgressiveScan:
+    . LinkedBlockingQueue de Point 
+    . Um loop while enquanto a queue n esta empty
+        - Incremental strategy que vai aumentando a distância ate chegar ao maximo range ou obstaculo/boundries.
+        - É melhor que o grid e greedy quando o obstáculo/fronteira n esta demasiado longe. (para quando encontra unreachable)
+        - É pior que o greedy quando a fronteira/obstaculo esta longe do seu range ou n existe.
+
+- GreedyRangeScan:
+    . No global data structure
+    . Vários for's e if's encadeados
+    . Descrição:
+        - Começa por dar scan o mais longe possivel para averiguar reachability, averigua o mais rapido possivel se uma região esta reachable pelo radar
+            e não escondida por obstaculos e boundries.
+        - é melhor que o grid e progressive quando encontra rapidamente terreno que é reachable (supondo que para quando encontra reachable)
+        - é pior que o progressive e o grid quando existem muitos obstaculos e fronteiras
+
+- GridScan:
+    . LinkedBlockingQueue de Point e ArrayList de Point
+    . Vários if's e loops
+    . Descrição:
+        - Brute force approach que da scan de todos pontos em range para averiguar se é reachable pelo radar scan.
+        - é brute force depende da sorte
