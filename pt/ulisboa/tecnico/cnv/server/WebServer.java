@@ -182,8 +182,10 @@ public class WebServer {
 					System.out.println("Couldn't get the metrics for this request, an error ocurred.");
 					return;
 				}
-
-				BufferedWriter out = new BufferedWriter(new FileWriter("/home/vagrant/cnv/CNV/"+currThread+"_analysis.txt"));
+				String dir = System.getProperty("user.dir");
+				System.out.println("Saving metrics to:"+dir);
+				String algorithmUsed = newArgs.get(17);
+				BufferedWriter out = new BufferedWriter(new FileWriter(dir+"/"+currThread+"_"+algorithmUsed+"analysis.txt"));
 
 				out.write("Dynamic information summary for thread:" + currThread);
 				out.write("\nNumber of basic blocks: " + stats.dyn_bb_count);
