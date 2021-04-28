@@ -18,33 +18,44 @@ import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.Reservation;
+import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.ec2.model.AvailabilityZone;
+
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
+import com.amazonaws.services.cloudwatch.model.ComparisonOperator;
 import com.amazonaws.services.cloudwatch.model.Dimension;
+import com.amazonaws.services.cloudwatch.model.PutMetricAlarmRequest;
+import com.amazonaws.services.cloudwatch.model.PutMetricAlarmResult;
+import com.amazonaws.services.cloudwatch.model.StandardUnit;
+import com.amazonaws.services.cloudwatch.model.Statistic;
 import com.amazonaws.services.cloudwatch.model.Datapoint;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
 import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
-import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
+import com.amazonaws.services.cloudwatch.model.DeleteAlarmsRequest;
+import com.amazonaws.services.cloudwatch.model.DeleteAlarmsResult;
 
-import com.amazonaws.services.ec2.model.AvailabilityZone;
+
 import com.amazonaws.client.builder.AwsClientBuilder;
 
-import com.amazonaws.services.autoscaling.model.*;
+import com.amazonaws.services.elasticloadbalancing.*;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
+
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClientBuilder;
 import com.amazonaws.services.autoscaling.*;
-import com.amazonaws.services.elasticloadbalancing.*;
+import com.amazonaws.services.autoscaling.model.*;
 
 public class EC2Launch {
     static AmazonEC2 ec2;
     static AmazonElasticLoadBalancing elb;
     static AmazonAutoScaling scalerClient;
+    static AmazonCloudWatch cw;
     static AWSCredentials credentials = null;
 
-    static String AMI_ID = "ami-043f66b7f8406a2fb";
+    static String AMI_ID = "ami-05d72852800cbf29e";
     static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
     static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
     static String KEY_PAIR_NAME = "cnv-monitor-teste";
@@ -54,7 +65,15 @@ public class EC2Launch {
     static String LB_NAME = "cnv-lb";
     static String LAUNCH_CONFIG_NAME  = "cnv-as-launch-config";
     static String AUTO_SCALING_GROUP_NAME = "cnv-scaling-group";
+    static String ALARM_THRESHOLD_EXCEED = "alarmAS-Threshold-Exceeded";
+    static String ALARM_THRESHOLD_BELOW = "alarmAS-Threshold-Below-Limit";
+    static String POLICY_CREATE_INSTANCE = "createInstancePolicy";
+    static String POLICY_DELETE_INSTANCE = "removeInstancePolicy";
+    static String AWS_ACCOUNT_ID = "735932901659";
 
+
+    // Empty or replaced when another instance created
+    static String instanceId = "i-0d4287d4622a5d469";
 
     private static void init() throws Exception {
         // Vai tentar ler as credenciais localizadas em ~/.aws/credentials
@@ -65,7 +84,11 @@ public class EC2Launch {
         }
 
         // EC2 Instances client
-        ec2 = AmazonEC2ClientBuilder.standard().withRegion(REGION_NAME).withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+        ec2 = AmazonEC2ClientBuilder
+                .standard()
+                .withRegion(REGION_NAME)
+                .withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .build();
 
         // Load balancer client
         elb = AmazonElasticLoadBalancingClientBuilder
@@ -80,26 +103,26 @@ public class EC2Launch {
                 .withCredentials(new AWSStaticCredentialsProvider(credentials))
                 .withRegion(REGION_NAME)
                 .build();
+
+        // Cloudwatch client
+        cw = AmazonCloudWatchClientBuilder
+                .standard()
+                .withRegion(REGION_NAME)
+                .withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .build();
     }
 
     public static void main(String[] args) throws Exception {
         init();
-        String instanceId = startInstance();
-        System.out.println("Waiting a couple seconds so the new instance changes state to RUNNING...");
-        Thread.sleep(20000);
-
-        createLoadBalancer();
-        registerInstancesToLb();
-
-        System.out.println("Pause time, observe whats happening....");
-        Thread.sleep(120000);
-        System.out.println("Pause time over, terminating resources...");
-
-        terminateInstance(instanceId);
-        //createAutoScaler();
-
-        //terminateAutoScaler();
+        deleteScalingPolicies();
+        deleteAlarms();
+        terminateAutoScaler();
         terminateLoadBalancer();
+
+        //createLoadBalancer();
+        //createAutoScaler();
+        //createScalingPolicies();
+        //createAlarms();
     }
 
     /**
@@ -169,6 +192,10 @@ public class EC2Launch {
 
         CreateLoadBalancerResult lbResult = elb.createLoadBalancer(lbRequest);
         System.out.println("ELB Load Balancer created...");
+
+        //System.out.println("Waiting a couple seconds so the new instance changes state to RUNNING...");
+        //Thread.sleep(20000);
+        //registerInstancesToLb();
     }
 
     /**
@@ -244,27 +271,178 @@ public class EC2Launch {
      * Creates an auto-scaler
      */
     private static void createAutoScaler() {
-        System.out.println("Creating launch configuration for auto scaler...");
-        // Criar launch configuration
-        CreateLaunchConfigurationRequest requestLaunchConfig = new CreateLaunchConfigurationRequest()
-                                            .withLaunchConfigurationName(LAUNCH_CONFIG_NAME)
-                                            .withImageId(AMI_ID)
-                                            .withSecurityGroups(SECURITY_GROUP_ID)
-                                            .withInstanceType(INSTANCE_TYPE);
-
-        CreateLaunchConfigurationResult responseLaunchCOnfig = scalerClient.createLaunchConfiguration(requestLaunchConfig);
+        createLaunchConfiguration();
 
         System.out.println("Creating auto scaling group...");
         // Criar auto scaling group com a launch configuration criada, selecionar o LB que supervisiona
         CreateAutoScalingGroupRequest requestScalingGroup = new CreateAutoScalingGroupRequest().withAutoScalingGroupName(AUTO_SCALING_GROUP_NAME)
                                             .withLaunchConfigurationName(LAUNCH_CONFIG_NAME)
-                                            .withMinSize(1)
-                                            .withMaxSize(3)
+                                            .withMinSize(2)
+                                            .withMaxSize(4)
                                             .withAvailabilityZones(ZONE_NAME)
                                             .withLoadBalancerNames(LB_NAME); //.withHealthCheckType("ELB").withHealthCheckGracePeriod(120);
 
         CreateAutoScalingGroupResult responseScalingGroup = scalerClient.createAutoScalingGroup(requestScalingGroup);
         return;
+    }
+
+    /**
+     * Creates the alarms to be used by the scaling policy
+     * so the auto-scaler can create or delete on demand new
+     * instances.
+     *
+     * The alarms are not working as the metrics are not being gathered for the instances
+     * for some reason...
+     */
+    private static void createAlarms() {
+        try {
+            /**
+             * TODO: Entender o que dimension é e se esta relacionado
+             * ao que é monitorizado...
+             */
+            Dimension dimension = new Dimension()
+                    .withName("instanceId")
+                    .withValue(instanceId);
+
+            String arnResourceCreate = "arn:aws:autoscaling:"
+                    + REGION_NAME + ":" + AWS_ACCOUNT_ID + ":scalingPolicy:policy-id"
+                    + ":"+AUTO_SCALING_GROUP_NAME+":policyName/"+POLICY_CREATE_INSTANCE;
+
+            System.out.println("Creating " + ALARM_THRESHOLD_EXCEED + " alarm.");
+            PutMetricAlarmRequest requestHigherAlarm = new PutMetricAlarmRequest()
+                    .withAlarmName(ALARM_THRESHOLD_EXCEED)
+                    .withComparisonOperator(
+                            ComparisonOperator.GreaterThanThreshold)
+                    .withEvaluationPeriods(1)
+                    .withMetricName("CPUUtilization")
+                    .withNamespace("AWS/EC2")
+                    .withPeriod(60)
+                    .withStatistic(Statistic.Average)
+                    .withThreshold(70.0)
+                    .withActionsEnabled(false)
+                    .withAlarmDescription("Alarm when server CPU utilization exceeds 70%")
+                    .withUnit(StandardUnit.Seconds)
+                    .withDimensions(dimension)
+                    .withAlarmActions(arnResourceCreate);
+
+            PutMetricAlarmResult responseHigherAlarm = cw.putMetricAlarm(requestHigherAlarm);
+
+
+            System.out.println("Creating " + ALARM_THRESHOLD_BELOW + " alarm.");
+
+            String arnResourceDelete = "arn:aws:autoscaling:"
+                    + REGION_NAME + ":" + AWS_ACCOUNT_ID + ":scalingPolicy:policy-id"
+                    + ":"+AUTO_SCALING_GROUP_NAME+":policyName/"+POLICY_DELETE_INSTANCE;
+
+            PutMetricAlarmRequest requestLowerAlarm = new PutMetricAlarmRequest()
+                    .withAlarmName(ALARM_THRESHOLD_BELOW)
+                    .withComparisonOperator(
+                            ComparisonOperator.LessThanThreshold)
+                    .withEvaluationPeriods(1)
+                    .withMetricName("CPUUtilization")
+                    .withNamespace("AWS/EC2")
+                    .withPeriod(60)
+                    .withStatistic(Statistic.Average)
+                    .withThreshold(10.0)
+                    .withActionsEnabled(false)
+                    .withAlarmDescription("Alarm when server CPU utilization goes below 10%")
+                    .withUnit(StandardUnit.Seconds)
+                    .withDimensions(dimension)
+                    .withAlarmActions(arnResourceDelete);
+
+            PutMetricAlarmResult responseLowerAlarm = cw.putMetricAlarm(requestLowerAlarm);
+
+            System.out.println("Alarms created...");
+        } catch (AmazonServiceException ase) {
+            System.out.println("Caught Exception: " + ase.getMessage());
+            System.out.println("Reponse Status Code: " + ase.getStatusCode());
+            System.out.println("Error Code: " + ase.getErrorCode());
+            System.out.println("Request ID: " + ase.getRequestId());
+        }
+    }
+
+    /**
+     * Creates the scaling policies to be used by the
+     * auto-scaler group.
+     * It used alarms created before hand.
+     */
+    private static void createScalingPolicies() {
+        try {
+            System.out.println("Creating scaling policies.");
+
+            PutScalingPolicyRequest policyRequest = new PutScalingPolicyRequest()
+                    .withAutoScalingGroupName(AUTO_SCALING_GROUP_NAME)
+                    .withPolicyName(POLICY_CREATE_INSTANCE)
+                    .withAdjustmentType("ChangeInCapacity")
+                    .withScalingAdjustment(1);
+
+            PutScalingPolicyResult policyResponse = scalerClient.putScalingPolicy(policyRequest);
+
+
+            PutScalingPolicyRequest policyRequestDelete = new PutScalingPolicyRequest()
+                    .withAutoScalingGroupName(AUTO_SCALING_GROUP_NAME)
+                    .withPolicyName(POLICY_DELETE_INSTANCE)
+                    .withAdjustmentType("ChangeInCapacity")
+                    .withScalingAdjustment(-1);
+
+            PutScalingPolicyResult policyResponseDelete = scalerClient.putScalingPolicy(policyRequestDelete);
+
+            System.out.println("Policies created");
+        } catch (AmazonServiceException ase) {
+            System.out.println("Caught Exception: " + ase.getMessage());
+            System.out.println("Reponse Status Code: " + ase.getStatusCode());
+            System.out.println("Error Code: " + ase.getErrorCode());
+            System.out.println("Request ID: " + ase.getRequestId());
+        }
+    }
+
+    /**
+     * Creates the launch configuration to be used by
+     * the auto-scaler group. (image, max, min...)
+     */
+    private static void createLaunchConfiguration() {
+        System.out.println("Creating launch configuration for auto scaler...");
+        // Criar launch configuration
+        CreateLaunchConfigurationRequest requestLaunchConfig = new CreateLaunchConfigurationRequest()
+                .withLaunchConfigurationName(LAUNCH_CONFIG_NAME)
+                .withImageId(AMI_ID)
+                .withSecurityGroups(SECURITY_GROUP_ID)
+                .withInstanceType(INSTANCE_TYPE);
+
+        CreateLaunchConfigurationResult responseLaunchConfig = scalerClient.createLaunchConfiguration(requestLaunchConfig);
+    }
+
+    /**
+     * Deletes the alarms used by the Auto-scaler group
+     */
+    private static void deleteAlarms() {
+        System.out.println("Deleting alarms.");
+
+        DeleteAlarmsRequest request = new DeleteAlarmsRequest()
+                .withAlarmNames(ALARM_THRESHOLD_EXCEED, ALARM_THRESHOLD_BELOW);
+
+        DeleteAlarmsResult response = cw.deleteAlarms(request);
+    }
+
+    /**
+     * Deletes the scaling policies used by the auto-scaler
+     */
+    private static void deleteScalingPolicies() {
+        System.out.println("Deleting scaling policies.");
+
+        DeletePolicyRequest requestCreatePolicy = new DeletePolicyRequest()
+                .withPolicyName(POLICY_CREATE_INSTANCE)
+                .withAutoScalingGroupName(AUTO_SCALING_GROUP_NAME);
+
+        DeletePolicyResult responseCreatePolicy = scalerClient.deletePolicy(requestCreatePolicy);
+
+        DeletePolicyRequest requestDeletePolicy = new DeletePolicyRequest()
+                .withPolicyName(POLICY_DELETE_INSTANCE)
+                .withAutoScalingGroupName(AUTO_SCALING_GROUP_NAME);
+
+        DeletePolicyResult responseDeletePolicy = scalerClient.deletePolicy(requestDeletePolicy);
+
+        System.out.println("Policies deleted...");
     }
 
     /**
@@ -294,6 +472,7 @@ public class EC2Launch {
      * Only mandatory for phase 2
      */
     private static void createMSS() {
+        System.out.println("Creating MSS.");
         return;
     }
 
@@ -303,6 +482,7 @@ public class EC2Launch {
      *  Only mandatory for phase 2
      */
     private static void terminateMSS() {
+        System.out.println("Deleting MSS.");
         return;
     }
 }

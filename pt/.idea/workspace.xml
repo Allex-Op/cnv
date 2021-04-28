@@ -2,16 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/../12_GRID_SCANanalysis.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../12_GRID_SCANanalysis.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../deploy/EC2Launch.java" beforeDir="false" afterPath="$PROJECT_DIR$/../deploy/EC2Launch.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/PerThreadStats.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/PerThreadStats.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/PerThreadStats.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/PerThreadStats.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/BIT/StatisticsTool.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$MyHandler.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$MyHandler.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/GreedyRangeScanSolverStrategy.class" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/solver/ProgressiveScanSolverStrategy.class" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
