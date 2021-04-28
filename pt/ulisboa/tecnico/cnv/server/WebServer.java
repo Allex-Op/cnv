@@ -191,6 +191,12 @@ public class WebServer {
 				out.write("\nNumber of basic blocks: " + stats.dyn_bb_count);
 				out.write("\nNumber of executed instructions: " + stats.dyn_instr_count);
 				out.write("\nTotal number of branches to check:" + stats.branch_checks);
+				out.write("\nNew count: " + stats.newcount);
+				out.write("\nField load count: " + stats.fieldloadcount);
+				out.write("\nField store count: " + stats.fieldstorecount);
+
+
+				out.write("\n");
 				out.close();
 
 				StatisticsTool.removeThreadStats(currThread.toString());

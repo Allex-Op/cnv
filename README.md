@@ -1,3 +1,24 @@
+# AWS Architecture
+
+The architecture is composed by the following services: web servers, load balancer and auto-scaler.
+The load-balancer and auto-scaler are the AWS implementations at this point.
+
+# AWS Parameters
+
+AMI_ID = "ami-043f66b7f8406a2fb";
+SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
+SECURITY_GROUP_NAME = "cnv-test-monitoring";
+KEY_PAIR_NAME = "cnv-monitor-teste";
+INSTANCE_TYPE = "t2.micro";
+ZONE_NAME = "us-east-2a";
+REGION_NAME = "us-east-2";
+LB_NAME = "cnv-lb";
+LAUNCH_CONFIG_NAME  = "cnv-as-launch-config";
+AUTO_SCALING_GROUP_NAME = "cnv-scaling-group";
+
+
+
+
 # Cloud Computing and Virtualization - 2020/21, 2nd Semester
 [Course Page: https://fenix.tecnico.ulisboa.pt/disciplinas/AVExe76/2020-2021/2-semestre/pagina-inicial](https://fenix.tecnico.ulisboa.pt/disciplinas/AVExe/2018-2019/2-semestre/pagina-inicial)
 

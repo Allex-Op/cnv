@@ -1,4 +1,7 @@
 Dynamic information summary for thread:12
-Number of basic blocks: 2097721
-Number of executed instructions: 6098669
-Total number of branches to check:903278
+Number of basic blocks: 9343545
+Number of executed instructions: 26021051
+Total number of branches to check:3668852
+New count: 0
+Field load count: 0
+Field store count: 0

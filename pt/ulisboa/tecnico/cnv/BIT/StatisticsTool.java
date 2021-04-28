@@ -36,6 +36,19 @@ public class StatisticsTool {
 						instr.addBefore("pt/ulisboa/tecnico/cnv/BIT/StatisticsTool", "dynCheckedBranch", "null");
 					}
 				}
+
+				// Contar new's and memory accesses
+				for (Enumeration instrs = instructions.elements(); instrs.hasMoreElements(); ) {
+					Instruction instr = (Instruction) instrs.nextElement();
+					int opcode=instr.getOpcode();
+
+					if (opcode==InstructionTable.NEW)
+						instr.addBefore("pt/ulisboa/tecnico/cnv/BIT/StatisticsTool", "allocCount", new Integer(opcode));
+					else if (opcode == InstructionTable.getfield)
+						instr.addBefore("pt/ulisboa/tecnico/cnv/BIT/StatisticsTool", "LSFieldCount", new Integer(0));
+					else if (opcode == InstructionTable.putfield)
+						instr.addBefore("pt/ulisboa/tecnico/cnv/BIT/StatisticsTool", "LSFieldCount", new Integer(1));
+				}
 			}
 
 			ci.write(out_file);
@@ -54,6 +67,25 @@ public class StatisticsTool {
 		stats.get(threadId).branch_checks++;
 	}
 
+	// count new allocations
+	public static void allocCount(int type)
+	{
+		String threadId = new Long(Thread.currentThread().getId()).toString();
+		stats.get(threadId).newcount++;
+	}
+
+	// count memory access load & store
+	public static void LSFieldCount(int type)
+	{
+		String threadId = new Long(Thread.currentThread().getId()).toString();
+
+		if (type == 0)
+			stats.get(threadId).fieldloadcount++;
+		else
+			stats.get(threadId).fieldstorecount++;
+	}
+
+
 	// Conta instruções e BBL's
     public static void dynInstrCount(int sizeIncr) {
 		String threadId = new Long(Thread.currentThread().getId()).toString();
@@ -62,7 +94,7 @@ public class StatisticsTool {
 		stats.get(threadId).dyn_bb_count++;
 	}
 
-    public static synchronized void analysisInit(String foo)
+    public static void analysisInit(String foo)
 		{
 			// putIfAbsent - used because instrumented functions can call for the same thread other functions and lose data
 
