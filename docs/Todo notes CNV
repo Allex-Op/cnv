@@ -1,0 +1,38 @@
+Todo notes CNV:
+
+- Extender webserver com healtcheck endpoint
+- Criar image vm para apresentação com o rc.local a iniciar automaticamente
+- Adicionar MSS ao código do EC2Deploy
+- Implementar LB
+
+javac pt/ulisboa/tecnico/cnv/server/WebServer.java
+javac deploy/EC2Launch.java
+
+
+Local:
+export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/vagrant/aws-java-sdk-1.11.1005/lib/aws-java-sdk-1.11.1005.jar:/home/vagrant/aws-java-sdk-1.11.1005/third-party/lib/*"
+source pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
+java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000
+
+
+Remote/AWS Instance:
+wget http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip
+unzip aws-java-sdk.zip
+sudo nano /root/.aws/credentials
+
+sudo yum install git
+git clone https://github.com/BFreitas16/CNV.git
+sudo yum install java-1.7.0-openjdk-devel.x86_64
+
+sudo chmod +x /etc/rc.local
+sudo nano /etc/rc.local 
+
+Adicionar ao rc.local:
+export CLASSPATH="/home/ec2-user/CNV:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/server:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/ec2-user/aws-java-sdk-1.11.1013/lib/aws-java-sdk-1.11.1013.jar:/home/vagrant/aws-java-sdk-1.11.1013/third-party/lib/*"
+source /home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
+cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000 >> /home/ec2-user/webServer_logs.txt
+
+
+
+
+ab -n 1 -c 1 -s 500 "http://3.21.105.6:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"

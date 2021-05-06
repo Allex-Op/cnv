@@ -56,11 +56,12 @@ public class EC2Launch {
     static AWSCredentials credentials = null;
 
     // Snapshot image
-    static String AMI_ID = "ami-05d72852800cbf29e";
+    //static String AMI_ID = "ami-05d72852800cbf29e";   // Default EC2 Instance AMI
+    static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
 
     static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
     static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
-    static String KEY_PAIR_NAME = "cnv-monitor-teste";
+    static String KEY_PAIR_NAME = "cnv-portatil-key";
     static String INSTANCE_TYPE = "t2.micro";
     static String ZONE_NAME = "us-east-2a";
     static String REGION_NAME = "us-east-2";
@@ -72,6 +73,7 @@ public class EC2Launch {
     static String POLICY_CREATE_INSTANCE = "createInstancePolicy";
     static String POLICY_DELETE_INSTANCE = "removeInstancePolicy";
     static String AWS_ACCOUNT_ID = "735932901659";
+    static String HEALTHCHECK_TYPE = "ELB";
 
 
     // Empty or replaced when another instance created
@@ -116,7 +118,9 @@ public class EC2Launch {
 
     public static void main(String[] args) throws Exception {
         init();
-        createResources();
+        //createResources();
+        deleteResources();
+        //startInstance();
     }
 
     /**
@@ -296,7 +300,7 @@ public class EC2Launch {
                                             .withMaxSize(4)
                                             .withAvailabilityZones(ZONE_NAME)
                                             .withLoadBalancerNames(LB_NAME)
-                                            .withHealthCheckType("ELB")
+                                            .withHealthCheckType(HEALTHCHECK_TYPE)
                                             .withHealthCheckGracePeriod(60);
 
         CreateAutoScalingGroupResult responseScalingGroup = scalerClient.createAutoScalingGroup(requestScalingGroup);
