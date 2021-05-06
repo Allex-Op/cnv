@@ -1,4 +1,4 @@
-package deploy;
+package pt.ulisboa.tecnico.cnv.deploy;
 
 import java.util.HashSet;
 import java.util.List;
@@ -85,35 +85,35 @@ public class EC2Launch {
 
     // Snapshot image
     //static String AMI_ID = "ami-05d72852800cbf29e";   // Default EC2 Instance AMI
-    static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
+    public static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
 
     // Security configurations
-    static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
-    static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
-    static String KEY_PAIR_NAME = "cnv-portatil-key";
+    public static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
+    public static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
+    public static String KEY_PAIR_NAME = "cnv-portatil-key";
 
     // General configs
-    static String INSTANCE_TYPE = "t2.micro";
-    static String ZONE_NAME = "us-east-2a";
-    static String REGION_NAME = "us-east-2";
+    public static String INSTANCE_TYPE = "t2.micro";
+    public static String ZONE_NAME = "us-east-2a";
+    public static String REGION_NAME = "us-east-2";
 
     // Load balancer configs
-    static String LB_NAME = "cnv-lb";
-    static String HEALTHCHECK_TYPE = "ELB";
+    public static String LB_NAME = "cnv-lb";
+    public static String HEALTHCHECK_TYPE = "ELB";
 
     // AutoScaler configurations
-    static String LAUNCH_CONFIG_NAME  = "cnv-as-launch-config";
-    static String AUTO_SCALING_GROUP_NAME = "cnv-scaling-group";
-    static String ALARM_THRESHOLD_EXCEED = "alarmAS-Threshold-Exceeded";
-    static String ALARM_THRESHOLD_BELOW = "alarmAS-Threshold-Below-Limit";
-    static String POLICY_CREATE_INSTANCE = "createInstancePolicy";
-    static String POLICY_DELETE_INSTANCE = "removeInstancePolicy";
-    static String AWS_ACCOUNT_ID = "735932901659";
+    public static String LAUNCH_CONFIG_NAME  = "cnv-as-launch-config";
+    public static String AUTO_SCALING_GROUP_NAME = "cnv-scaling-group";
+    public static String ALARM_THRESHOLD_EXCEED = "alarmAS-Threshold-Exceeded";
+    public static String ALARM_THRESHOLD_BELOW = "alarmAS-Threshold-Below-Limit";
+    public static String POLICY_CREATE_INSTANCE = "createInstancePolicy";
+    public static String POLICY_DELETE_INSTANCE = "removeInstancePolicy";
+    public static String AWS_ACCOUNT_ID = "735932901659";
 
 
     // DynamoDB configurations
-    static String TABLE_NAME_DYNAMODB = "metrics-table";
-    static String PRIMARY_KEY_NAME_DYNAMODB = "identifier";
+    public static String TABLE_NAME_DYNAMODB = "metrics-table";
+    public static String PRIMARY_KEY_NAME_DYNAMODB = "identifier";
 
 
     // Empty or replaced when another instance created
@@ -169,7 +169,7 @@ public class EC2Launch {
         //deleteResources();
         //startInstance();
 
-        createMSS();
+        //createMSS();
     }
 
     /**

@@ -2,8 +2,14 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="069dceb1-74f6-4a42-8986-d845b2328356" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/../deploy/EC2Launch.java" beforeDir="false" afterPath="$PROJECT_DIR$/../deploy/EC2Launch.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../deploy/EC2Launch.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../deploy/EC2Launch.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../deploy/compile_changes.sh" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$HealthHandler.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$HealthHandler.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$MyHandler.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer$MyHandler.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.class" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.java" beforeDir="false" afterPath="$PROJECT_DIR$/ulisboa/tecnico/cnv/server/WebServer.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -10,6 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+
+
+import java.util.UUID;
 
 import java.util.concurrent.Executors;
 
@@ -28,13 +33,53 @@ import java.io.FileWriter;
 
 import pt.ulisboa.tecnico.cnv.BIT.*;
 
+//Aws stuff
+import pt.ulisboa.tecnico.cnv.deploy.EC2Launch;
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.AWSStaticCredentialsProvider;
+import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
+import com.amazonaws.services.dynamodbv2.model.PutItemResult;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+
+
+
 public class WebServer {
+
+	static AWSCredentials credentials = null;
+	static AmazonDynamoDB dynamoDBClient;
 
 	static ServerArgumentParser sap = null;
 
+	static Boolean local = false;
+
+	private static void initAws() throws Exception {
+		// Vai tentar ler as credenciais localizadas em ~/.aws/credentials
+		try {
+			credentials = new ProfileCredentialsProvider().getCredentials();
+		} catch (Exception e) {
+			throw new AmazonClientException("Cannon load credentials, make sure they exist.", e);
+		}
+
+		// DynamoDB client
+		dynamoDBClient = AmazonDynamoDBClientBuilder
+				.standard()
+				.withCredentials(new AWSStaticCredentialsProvider(credentials))
+				.withRegion(EC2Launch.REGION_NAME)
+				.build();
+	}
+
 	public static void main(final String[] args) throws Exception {
+		if(args.length > 0)
+			if(args[0].equals("local"))
+				local = true;
 
 		try {
+			initAws();
+
 			// Get user-provided flags.
 			WebServer.sap = new ServerArgumentParser(args);
 		}
@@ -211,11 +256,80 @@ public class WebServer {
 				out.write("\n");
 				out.close();
 
+				sendToMss(newArgs, stats);
 				StatisticsTool.removeThreadStats(currThread.toString());
 			} catch (Exception e) {
 				System.out.println("An error occurred.");
 				e.printStackTrace();
 			}
+		}
+
+		/**
+		 *	Sends the cost of each request to the MSS with its associated arguments
+		 *[-w, 512, -h, 512, -x0, 0, -x1, 64, -y0, 0, -y1, 64, -xS, 1, -yS, 2, -s, GRID_SCAN, -i, datasets/SIMPLE_VORONOI_512x512_1.png]
+		 */
+		private void sendToMss(ArrayList<String> newArgs, PerThreadStats stats) {
+			try {
+				// No MSS locally
+				if(local)
+					return;
+
+				System.out.println("Saving metrics to MSS....");
+
+				long cost = (stats.dyn_instr_count * 1) + (stats.branch_checks * 2) + (stats.newcount * 15) +
+						(stats.fieldloadcount * 10) + (stats.fieldstorecount * 10);
+
+				Map<String, AttributeValue> item = newItem(
+						getRandomId(),
+						Integer.parseInt(newArgs.get(1)),
+						Integer.parseInt(newArgs.get(3)),
+						Integer.parseInt(newArgs.get(5)),
+						Integer.parseInt(newArgs.get(7)),
+						Integer.parseInt(newArgs.get(9)),
+						Integer.parseInt(newArgs.get(11)),
+						Integer.parseInt(newArgs.get(13)),
+						Integer.parseInt(newArgs.get(15)),
+						newArgs.get(17),
+						newArgs.get(19),
+						cost
+				);
+
+				PutItemRequest putItemRequest = new PutItemRequest(EC2Launch.TABLE_NAME_DYNAMODB, item);
+				PutItemResult putItemResult = dynamoDBClient.putItem(putItemRequest);
+				System.out.println("Result: " + putItemResult);
+
+			} catch(Exception e) {
+				System.out.println("Error sending metrics to the MSS...");
+			}
+		}
+
+		private static Map<String, AttributeValue> newItem(String randomId, int width, int height, int x0, int x1, int y0, int y1, int xS, int yS, String strategy, String input, long cost) {
+			Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
+			item.put(EC2Launch.PRIMARY_KEY_NAME_DYNAMODB, new AttributeValue(randomId));
+			item.put("width", new AttributeValue().withN(Integer.toString(width)));
+			item.put("height", new AttributeValue().withN(Integer.toString(height)));
+			item.put("x0", new AttributeValue().withN(Integer.toString(x0)));
+			item.put("x1", new AttributeValue().withN(Integer.toString(x1)));
+			item.put("y0", new AttributeValue().withN(Integer.toString(y0)));
+			item.put("y1", new AttributeValue().withN(Integer.toString(y1)));
+			item.put("xS", new AttributeValue().withN(Integer.toString(xS)));
+			item.put("yS", new AttributeValue().withN(Integer.toString(yS)));
+			item.put("strategy", new AttributeValue(strategy));
+			item.put("input", new AttributeValue(input));
+			item.put("cost", new AttributeValue().withN(Long.toString(cost)));
+
+			return item;
+		}
+
+		/**
+		 * Generates an random id because aws doesn't have auto incremented
+		 * fields, as apparently its an anti pattern.
+		 *
+		 */
+		private static String getRandomId() {
+			UUID uuid = UUID.randomUUID();
+			String uuidAsString = uuid.toString();
+			return uuidAsString;
 		}
 	}
 

@@ -1,0 +1,7 @@
+Dynamic information summary for thread:16
+Number of basic blocks: 104466
+Number of executed instructions: 366733
+Total number of branches to check:26781
+New count: 4395
+Field load count: 66636
+Field store count: 0
