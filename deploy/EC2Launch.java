@@ -5,11 +5,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.HashMap;
+import java.util.Map;
+
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+
+//ec2 instance
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -21,6 +26,7 @@ import com.amazonaws.services.ec2.model.Reservation;
 import com.amazonaws.services.ec2.model.DescribeAvailabilityZonesResult;
 import com.amazonaws.services.ec2.model.AvailabilityZone;
 
+//cloudwatch
 import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
 import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
 import com.amazonaws.services.cloudwatch.model.ComparisonOperator;
@@ -35,18 +41,39 @@ import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.cloudwatch.model.DeleteAlarmsRequest;
 import com.amazonaws.services.cloudwatch.model.DeleteAlarmsResult;
 
-
 import com.amazonaws.client.builder.AwsClientBuilder;
 
+//Load balancer
 import com.amazonaws.services.elasticloadbalancing.*;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
 
+//Autoscaler
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClient;
 import com.amazonaws.services.autoscaling.AmazonAutoScalingClientBuilder;
 import com.amazonaws.services.autoscaling.*;
 import com.amazonaws.services.autoscaling.model.*;
+
+//DynamoDb
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
+import com.amazonaws.services.dynamodbv2.util.TableUtils;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.Condition;
+import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
+import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
+import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
+import com.amazonaws.services.dynamodbv2.model.KeyType;
+import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
+import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
+import com.amazonaws.services.dynamodbv2.model.PutItemResult;
+import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
+import com.amazonaws.services.dynamodbv2.model.ScanResult;
+import com.amazonaws.services.dynamodbv2.model.TableDescription;
+
 
 public class EC2Launch {
     static AmazonEC2 ec2;
@@ -54,18 +81,27 @@ public class EC2Launch {
     static AmazonAutoScaling scalerClient;
     static AmazonCloudWatch cw;
     static AWSCredentials credentials = null;
+    static AmazonDynamoDB dynamoDBClient;
 
     // Snapshot image
     //static String AMI_ID = "ami-05d72852800cbf29e";   // Default EC2 Instance AMI
     static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
 
+    // Security configurations
     static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
     static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
     static String KEY_PAIR_NAME = "cnv-portatil-key";
+
+    // General configs
     static String INSTANCE_TYPE = "t2.micro";
     static String ZONE_NAME = "us-east-2a";
     static String REGION_NAME = "us-east-2";
+
+    // Load balancer configs
     static String LB_NAME = "cnv-lb";
+    static String HEALTHCHECK_TYPE = "ELB";
+
+    // AutoScaler configurations
     static String LAUNCH_CONFIG_NAME  = "cnv-as-launch-config";
     static String AUTO_SCALING_GROUP_NAME = "cnv-scaling-group";
     static String ALARM_THRESHOLD_EXCEED = "alarmAS-Threshold-Exceeded";
@@ -73,7 +109,11 @@ public class EC2Launch {
     static String POLICY_CREATE_INSTANCE = "createInstancePolicy";
     static String POLICY_DELETE_INSTANCE = "removeInstancePolicy";
     static String AWS_ACCOUNT_ID = "735932901659";
-    static String HEALTHCHECK_TYPE = "ELB";
+
+
+    // DynamoDB configurations
+    static String TABLE_NAME_DYNAMODB = "metrics-table";
+    static String PRIMARY_KEY_NAME_DYNAMODB = "identifier";
 
 
     // Empty or replaced when another instance created
@@ -114,13 +154,22 @@ public class EC2Launch {
                 .withRegion(REGION_NAME)
                 .withCredentials(new AWSStaticCredentialsProvider(credentials))
                 .build();
+
+        // DynamoDB client
+        dynamoDBClient = AmazonDynamoDBClientBuilder
+                .standard()
+                .withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .withRegion(REGION_NAME)
+                .build();
     }
 
     public static void main(String[] args) throws Exception {
         init();
         //createResources();
-        deleteResources();
+        //deleteResources();
         //startInstance();
+
+        createMSS();
     }
 
     /**
@@ -488,22 +537,85 @@ public class EC2Launch {
     }
 
     /**
-     * Create MSS
-     *
-     * Only mandatory for phase 2
+     * Create MSS with a table to store the metrics and inserts
+     * mock data for the first requests received.
      */
     private static void createMSS() {
         System.out.println("Creating MSS.");
-        return;
+
+        try {
+            // Create a table with a primary hash key named 'name', which holds a string
+            CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME_DYNAMODB)
+                    .withKeySchema(new KeySchemaElement().withAttributeName(PRIMARY_KEY_NAME_DYNAMODB).withKeyType(KeyType.HASH))
+                    .withAttributeDefinitions(new AttributeDefinition().withAttributeName(PRIMARY_KEY_NAME_DYNAMODB).withAttributeType(ScalarAttributeType.S))
+                    .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
+
+            // Create table if it does not exist yet
+            TableUtils.createTableIfNotExists(dynamoDBClient, createTableRequest);
+            // wait for the table to move into ACTIVE state
+            TableUtils.waitUntilActive(dynamoDBClient, TABLE_NAME_DYNAMODB);
+
+            // Describe our new table
+            DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(TABLE_NAME_DYNAMODB);
+            TableDescription tableDescription = dynamoDBClient.describeTable(describeTableRequest).getTable();
+            System.out.println("Table Description: " + tableDescription);
+
+            insertInitialData();
+        } catch (AmazonServiceException ase) {
+            System.out.println("Caught an AmazonServiceException, which means your request made it "
+                    + "to AWS, but was rejected with an error response for some reason.");
+            System.out.println("Error Message:    " + ase.getMessage());
+            System.out.println("HTTP Status Code: " + ase.getStatusCode());
+            System.out.println("AWS Error Code:   " + ase.getErrorCode());
+            System.out.println("Error Type:       " + ase.getErrorType());
+            System.out.println("Request ID:       " + ase.getRequestId());
+        } catch (AmazonClientException ace) {
+            System.out.println("Caught an AmazonClientException, which means the client encountered "
+                    + "a serious internal problem while trying to communicate with AWS, "
+                    + "such as not being able to access the network.");
+            System.out.println("Error Message: " + ace.getMessage());
+        } catch (InterruptedException ie) {
+            System.out.println("Something about the TableUtils.WaitUntilActive");
+        }
     }
 
     /**
-     * Terminate MSS
-     *
-     *  Only mandatory for phase 2
+     *  Inserts initial DB data
      */
-    private static void terminateMSS() {
-        System.out.println("Deleting MSS.");
-        return;
+    private static void insertInitialData() throws AmazonClientException {
+        // Add an item
+        // arguments: width, height, x0, x1, y0, y1, xS, yS, strategy, input, cost
+        Map<String, AttributeValue> item = newItem("mock1", 512, 512, 0, 0, 128, 128, 10, 10, "GRID", "SIMPLE_VORONOI_512_512_1.png", 30000000);
+        PutItemRequest putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        PutItemResult putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Add another item
+        item = newItem("mock2", 512, 512, 0, 0, 128, 128, 10, 10, "GRID", "SIMPLE_VORONOI_512_512_1.png", 50000000);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+    }
+
+    /**
+     *  Creates a new item
+     *  arguments: width, height, x0, x1, y0, y1, xS, yS, strategy, input, cost
+     */
+    private static Map<String, AttributeValue> newItem(String randomId, int width, int height, int x0, int x1, int y0, int y1, int xS, int yS, String strategy, String input, long cost) {
+        Map<String, AttributeValue> item = new HashMap<String, AttributeValue>();
+        item.put(PRIMARY_KEY_NAME_DYNAMODB, new AttributeValue(randomId));
+        item.put("width", new AttributeValue().withN(Integer.toString(width)));
+        item.put("height", new AttributeValue().withN(Integer.toString(height)));
+        item.put("x0", new AttributeValue().withN(Integer.toString(x0)));
+        item.put("x1", new AttributeValue().withN(Integer.toString(x1)));
+        item.put("y0", new AttributeValue().withN(Integer.toString(y0)));
+        item.put("y1", new AttributeValue().withN(Integer.toString(y1)));
+        item.put("xS", new AttributeValue().withN(Integer.toString(xS)));
+        item.put("yS", new AttributeValue().withN(Integer.toString(yS)));
+        item.put("strategy", new AttributeValue(strategy));
+        item.put("input", new AttributeValue(input));
+        item.put("cost", new AttributeValue().withN(Long.toString(cost)));
+
+        return item;
     }
 }
