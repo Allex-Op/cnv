@@ -52,12 +52,24 @@ public class WebServer {
 
 
 		server.createContext("/scan", new MyHandler());
+		server.createContext("/health", new HealthHandler());
 
 		// be aware! infinite pool of threads!
 		server.setExecutor(Executors.newCachedThreadPool());
 		server.start();
 
 		System.out.println(server.getAddress().toString());
+	}
+
+	static class HealthHandler implements HttpHandler {
+		@Override
+		public void handle(final HttpExchange t) throws IOException {
+			String response = "I am alive?";
+			t.sendResponseHeaders(200, response.length());
+			OutputStream os = t.getResponseBody();
+			os.write(response.getBytes());
+			os.close();
+		}
 	}
 
 	static class MyHandler implements HttpHandler {

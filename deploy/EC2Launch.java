@@ -55,7 +55,9 @@ public class EC2Launch {
     static AmazonCloudWatch cw;
     static AWSCredentials credentials = null;
 
+    // Snapshot image
     static String AMI_ID = "ami-05d72852800cbf29e";
+
     static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
     static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
     static String KEY_PAIR_NAME = "cnv-monitor-teste";
@@ -114,23 +116,36 @@ public class EC2Launch {
 
     public static void main(String[] args) throws Exception {
         init();
+        createResources();
+    }
+
+    /**
+     * 1º Creates a Load Balancer
+     * 2º Registers the new instances with the load balancer (OPTIONAL???)
+     * 3º Creates Auto Scaler
+     * 4º Creates scaling policies
+     * 5º Creates alarms
+     */
+    private static void createResources() {
+        createLoadBalancer();
+        createAutoScaler();
+        createScalingPolicies();
+        createAlarms();
+    }
+
+    /**
+     * Deletes all created resources
+     */
+    private static void deleteResources() {
         deleteScalingPolicies();
         deleteAlarms();
         terminateAutoScaler();
         terminateLoadBalancer();
-
-        //createLoadBalancer();
-        //createAutoScaler();
-        //createScalingPolicies();
-        //createAlarms();
     }
 
     /**
      * Creates and starts an EC2 instance
-     * PS> The info below must be in the same region as connected with init()
-     *
-     * BTW currently a instância n esta a escolher uma zona para spawnar "eu-east-2b,2c...", o load balancer
-     * so funciona para o eu-east-2b, configurar...
+     * PS> The info below must be in the same region as connected with init().
      */
     private static String startInstance() {
         try {
@@ -280,7 +295,9 @@ public class EC2Launch {
                                             .withMinSize(2)
                                             .withMaxSize(4)
                                             .withAvailabilityZones(ZONE_NAME)
-                                            .withLoadBalancerNames(LB_NAME); //.withHealthCheckType("ELB").withHealthCheckGracePeriod(120);
+                                            .withLoadBalancerNames(LB_NAME)
+                                            .withHealthCheckType("ELB")
+                                            .withHealthCheckGracePeriod(60);
 
         CreateAutoScalingGroupResult responseScalingGroup = scalerClient.createAutoScalingGroup(requestScalingGroup);
         return;
