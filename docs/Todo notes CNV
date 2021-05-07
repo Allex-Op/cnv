@@ -1,16 +1,25 @@
 Todo notes CNV:
 
-- Extender webserver com healtcheck endpoint
-- Criar image vm para apresentação com o rc.local a iniciar automaticamente
-- Adicionar MSS ao código do EC2Deploy
+- MSS esta a repetir entradas para pedidos iguais, talvez meter algo para evitar entradas duplicadas
 - Implementar LB
+    - Auto-scaler
+    - Código AWS + Handler LB
+    - Query aos web servers periodica & alterar web server para poder ler essa info (id pedido) e introduzir esse id (adicionado pelo lb) na resposta talvez como header ou simplesmente eliminar? 
+    - Testar 
+
+
+Implementação classe LbStrategy (delete instance e distribute) + leitura/escrita MSS com os algoritmos para encontrar o mais semelhante + periodic check nas metricas do web server (piggyback? cada pedido que chega verifica last check)
+
+
+. O web server esta bounded a versão do sdk devido a ser java 7
+. Os requestArguments (params + viewport) assume que os parametros são corretos e vêm na ordem correta
 
 javac pt/ulisboa/tecnico/cnv/server/WebServer.java
-javac deploy/EC2Launch.java
+javac pt/ulisboa/tecnico/cnv/deploy/EC2Launch.java
 
 
 Local:
-export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/vagrant/aws-java-sdk-1.11.1005/lib/aws-java-sdk-1.11.1005.jar:/home/vagrant/aws-java-sdk-1.11.1005/third-party/lib/*"
+export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/vagrant/aws-java-sdk-1.11.1004/lib/aws-java-sdk-1.11.1004.jar:/home/vagrant/aws-java-sdk-1.11.1004/third-party/lib/*"
 source pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
 java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000
 
@@ -36,3 +45,5 @@ cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "
 
 
 ab -n 1 -c 1 -s 500 "http://3.21.105.6:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+http://cnv-lb-2108617815.us-east-2.elb.amazonaws.com/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
+http://cnv-lb-2108617815.us-east-2.elb.amazonaws.com/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png

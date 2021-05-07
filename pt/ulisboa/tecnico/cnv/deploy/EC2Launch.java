@@ -57,8 +57,8 @@ import com.amazonaws.services.autoscaling.model.*;
 
 //DynamoDb
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
+import com.amazonaws.services.dynamodbv2.util.TableUtils;
 import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.model.Condition;
@@ -166,7 +166,7 @@ public class EC2Launch {
     public static void main(String[] args) throws Exception {
         init();
         //createResources();
-        //deleteResources();
+        deleteResources();
         //startInstance();
 
         //createMSS();
@@ -370,9 +370,10 @@ public class EC2Launch {
              * TODO: Entender o que dimension é e se esta relacionado
              * ao que é monitorizado...
              */
+
             Dimension dimension = new Dimension()
-                    .withName("instanceId")
-                    .withValue(instanceId);
+                    .withName("AutoScalingGroupName")
+                    .withValue(AUTO_SCALING_GROUP_NAME);
 
             String arnResourceCreate = "arn:aws:autoscaling:"
                     + REGION_NAME + ":" + AWS_ACCOUNT_ID + ":scalingPolicy:policy-id"
