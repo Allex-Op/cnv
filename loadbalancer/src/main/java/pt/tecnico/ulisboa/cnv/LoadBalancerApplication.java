@@ -1,3 +1,6 @@
+package pt.tecnico.ulisboa.cnv;
+
+import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScalerThread;
 import com.sun.net.httpserver.HttpServer;
 
 import java.net.InetSocketAddress;
@@ -16,6 +19,8 @@ public class LoadBalancerApplication {
 
         try {
             AwsHandler.init();
+            AutoScalerThread as = new AutoScalerThread();
+            as.start();
 
             final HttpServer server = HttpServer.create(new InetSocketAddress(SERVER, PORT), 0);
 

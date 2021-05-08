@@ -1,4 +1,11 @@
+package pt.tecnico.ulisboa.cnv;
+
 public class Configs {
+    // Scanning strategies
+    public static String GRID_SCAN = "GRID_SCAN";
+    public static String GREEDY_RANGE_SCAN = "GREEDY_RANGE_SCAN";
+    public static String PROGRESSIVE_SCAN = "PROGRESSIVE_SCAN";
+
     // Metrics/Costs configurations
     public static int instrCost = 1;
     public static int branchCost = 2;
@@ -13,18 +20,37 @@ public class Configs {
     public static int VIEWPORT_AREA_512 = 512*512;
     public static int VIEWPORT_AREA_1024 = 1024*1024;
 
-    // AWS Configs - General
+    // AWS pt.tecnico.ulisboa.cnv.Configs - General
     public static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
     public static String INSTANCE_TYPE = "t2.micro";
     public static String ZONE_NAME = "us-east-2a";
     public static String REGION_NAME = "us-east-2";
 
-    // AWS Configs - DynamoDB
+    // AWS pt.tecnico.ulisboa.cnv.Configs - DynamoDB
     public static String TABLE_NAME_DYNAMODB = "metrics-table";
     public static String PRIMARY_KEY_NAME_DYNAMODB = "identifier";
+    public static final String INDEX_DYNAMODB = "ArgsIndex";
 
-    // AWS Configs - Security
+    // AWS pt.tecnico.ulisboa.cnv.Configs - Security
     public static String SECURITY_GROUP_ID = "sg-0891d16f3a1e3bbcb";
     public static String SECURITY_GROUP_NAME = "cnv-test-monitoring";
     public static String KEY_PAIR_NAME = "cnv-portatil-key";
+
+
+    // Auto-Scaler configs
+    public static int MINIMUM_CAPACITY = 2;
+    public static int MAXIMUM_CAPACITY = 6;
+    public static double BELOW_PROCESSING_THRESHOLD = 0.25;
+    public static double ABOVE_PROCESSING_THRESHOLD = 0.85;
+
+    // Job configs
+    public static double PERCENTAGE_OF_JOB_COMPLETED = 0.75;
+
+    // Instance configs
+    public static String urlBuild(String ip) {
+        return "http://" + ip + ":8000/";
+    }
+
+    public static int PORT = 8000;
+    public static int MAX_FAILED_HEALTH_CHECKS = 3;
 }

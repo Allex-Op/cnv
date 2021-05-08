@@ -1,3 +1,5 @@
+package pt.tecnico.ulisboa.cnv.model;
+
 import java.util.ArrayList;
 
 public class RequestArguments {
@@ -13,6 +15,7 @@ public class RequestArguments {
     private int xS;
     private int yS;
     private String strategy;
+    private String input;
 
     public RequestArguments() { }
 
@@ -111,5 +114,13 @@ public class RequestArguments {
 
     public void setyS(int yS) {
         this.yS = yS;
+    }
+
+    public String getInput() {
+        return input;
+    }
+
+    public void setInput(String input) {
+        this.input = input;
     }
 }

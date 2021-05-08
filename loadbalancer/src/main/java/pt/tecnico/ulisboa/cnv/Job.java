@@ -1,3 +1,9 @@
+package pt.tecnico.ulisboa.cnv;
+
+import pt.tecnico.ulisboa.cnv.model.DbEntry;
+import pt.tecnico.ulisboa.cnv.model.RequestArguments;
+import pt.tecnico.ulisboa.cnv.model.StorageAccess;
+
 import java.util.UUID;
 
 /**
@@ -30,17 +36,16 @@ public class Job {
         UUID uuid = UUID.randomUUID();
         this.id = uuid.toString();
 
-        expectedCost = getCostOfMostSimilarJob();
-        correctCost(arguments.calculateViewPort());
+        expectedCost = getExpectedCost(arguments);
     }
 
     /**
      *  It will search for the most similar request
      *  that was already processed and take its cost.
      */
-    private long getCostOfMostSimilarJob() {
-        AwsHandler.readFromMss(arguments);
-        return 0;
+    private long getExpectedCost(RequestArguments args) {
+        DbEntry mostSimilarEntry = StorageAccess.getMostSimilarRequest(args);
+        return correctCost(mostSimilarEntry.getCost(), arguments.calculateViewPort());
     }
 
     /**
@@ -53,7 +58,7 @@ public class Job {
         long executedCost = getExecutedCost();
         double completedPercentage = ((double) executedCost) / ((double) expectedCost);
 
-        return completedPercentage > 0.75;
+        return completedPercentage > Configs.PERCENTAGE_OF_JOB_COMPLETED;
     }
 
     /**
@@ -82,11 +87,11 @@ public class Job {
      *
      * Currently, we only do corrections on the viewport parameter.
      */
-    private void correctCost(long viewport) {
+    private long correctCost(long viewport, long mostSimilarCost) {
         // No correction needed for viewport argument when the value is one of values below, as there are already
         // default values in the MSS for them.
         if(viewport == Configs.VIEWPORT_AREA_256 || viewport == Configs.VIEWPORT_AREA_512 || viewport == Configs.VIEWPORT_AREA_1024)
-            return;
+            return mostSimilarCost;
 
         double deviation = 0;
         if(arguments.getStrategy().contains("grid")) {
@@ -103,7 +108,7 @@ public class Job {
             }
         }
 
-        expectedCost = (long) Math.floor(expectedCost * (1 + deviation));
+        return (long) Math.floor(mostSimilarCost * (1 + deviation));
     }
 
 }

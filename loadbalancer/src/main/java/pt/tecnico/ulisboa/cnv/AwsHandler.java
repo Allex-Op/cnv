@@ -1,9 +1,14 @@
+package pt.tecnico.ulisboa.cnv;
+
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.dynamodbv2.document.*;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 
@@ -13,6 +18,12 @@ import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import pt.tecnico.ulisboa.cnv.model.DbEntry;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * Contains the information to interact
@@ -85,10 +96,64 @@ public class AwsHandler {
     }
 
     public static void writeToMss() {
-        //TODO:
+        //TODO: É necessário se quer este método?
     }
 
-    public static void readFromMss(RequestArguments args) {
-        //TODO:
+    /**
+     *  Reads entries from the MSS, used to find the most similar
+     *  request to attribute a cost. Currently queried by the strategy argument
+     *  to avoid bringing in other unnecessary information. Another strategy could be
+     *  periodically reading all information.
+     *
+     *  Alternative to current strategy would be using "batchGetItem" but its kinda weird and has a limit.
+     */
+    public static List<DbEntry> readFromMss(String strategy) {
+        try {
+            DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
+            Table table = dynamoDB.getTable(Configs.TABLE_NAME_DYNAMODB);
+
+            Index index = table.getIndex(Configs.INDEX_DYNAMODB);
+            ItemCollection<QueryOutcome> items = null;
+
+            QuerySpec querySpec = new QuerySpec();
+            querySpec.withKeyConditionExpression("strategy = :v_strategy")
+                    .withValueMap(new ValueMap()
+                            .withString(":v_strategy", strategy)
+                    );
+
+            items = index.query(querySpec);
+
+            Iterator<Item> iterator = items.iterator();
+            items = index.query(querySpec);
+
+            List<DbEntry> dbEntries = new ArrayList<>();
+            while (iterator.hasNext()) {
+                String dbEntryJson = iterator.next().toJSONPretty();
+                ObjectMapper mapper = new ObjectMapper();
+                DbEntry entry = mapper.readValue(dbEntryJson, DbEntry.class);
+                dbEntries.add(entry);
+            }
+
+            return dbEntries;
+        } catch (AmazonServiceException ase) {
+            System.out.println("Caught an AmazonServiceException, which means your request made it "
+                    + "to AWS, but was rejected with an error response for some reason.");
+            System.out.println("Error Message:    " + ase.getMessage());
+            System.out.println("HTTP Status Code: " + ase.getStatusCode());
+            System.out.println("AWS Error Code:   " + ase.getErrorCode());
+            System.out.println("Error Type:       " + ase.getErrorType());
+            System.out.println("Request ID:       " + ase.getRequestId());
+        }
+        catch (AmazonClientException ace) {
+            System.out.println("Caught an AmazonClientException, which means the client encountered "
+                    + "a serious internal problem while trying to communicate with AWS, "
+                    + "such as not being able to access the network.");
+            System.out.println("Error Message: " + ace.getMessage());
+        }
+        catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+
+        return new ArrayList<DbEntry>();
     }
 }

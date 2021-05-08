@@ -1,5 +1,8 @@
+package pt.tecnico.ulisboa.cnv;
+
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
+import pt.tecnico.ulisboa.cnv.model.RequestArguments;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -14,12 +17,12 @@ public class LoadBalancerHandler implements HttpHandler {
         RequestArguments args = new RequestArguments(query);
         Job job = new Job(args);
 
-        LbStrategy.distributeRequest(job);
+        // Distribute request & wait for the answer
+        byte[] response = LbStrategy.distributeRequest(job, query);
 
-        String response = "I am alive?";
-        t.sendResponseHeaders(200, response.length());
+        t.sendResponseHeaders(200, response.length);
         OutputStream os = t.getResponseBody();
-        os.write(response.getBytes());
+        os.write(response);
         os.close();
     }
 }

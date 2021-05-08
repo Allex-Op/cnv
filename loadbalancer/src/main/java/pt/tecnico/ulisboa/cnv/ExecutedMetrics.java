@@ -1,3 +1,5 @@
+package pt.tecnico.ulisboa.cnv;
+
 /**
  * Class contains information about the currently executed metrics.
  * Its also used as the response from the query sent by the LB to the Web Servers.

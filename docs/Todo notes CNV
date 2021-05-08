@@ -2,10 +2,23 @@ Todo notes CNV:
 
 - MSS esta a repetir entradas para pedidos iguais, talvez meter algo para evitar entradas duplicadas
 - Implementar LB
-    - Auto-scaler
-    - Código AWS + Handler LB
-    - Query aos web servers periodica & alterar web server para poder ler essa info (id pedido) e introduzir esse id (adicionado pelo lb) na resposta talvez como header ou simplesmente eliminar? 
+    - Initial data fill no MSS
+    - Handler LB
+    - LB Strategy
+    - implementar concurrência da lista de instância pelo auto-scaler e lb strategy
+    - Healthcheck, instâncias podem morrer mas continuar marcadas no LB como funcionais.
     - Testar 
+
+
+Todo after:
+- Entradas repetidas no MSS 
+- Mensagens queued ser dispatched para web servers (caguei)
+- Query aos web servers periodica & alterar web server para poder ler essa info (id pedido) e introduzir esse id (adicionado pelo lb) na resposta talvez como header ou simplesmente eliminar? 
+
+
+Report:
+Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
+
 
 
 Implementação classe LbStrategy (delete instance e distribute) + leitura/escrita MSS com os algoritmos para encontrar o mais semelhante + periodic check nas metricas do web server (piggyback? cada pedido que chega verifica last check)

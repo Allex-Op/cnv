@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Iterator;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -15,6 +16,9 @@ import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 
 //ec2 instance
+import com.amazonaws.services.dynamodbv2.document.DynamoDB;
+import com.amazonaws.services.dynamodbv2.document.Item;
+import com.amazonaws.services.dynamodbv2.model.*;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -59,20 +63,15 @@ import com.amazonaws.services.autoscaling.model.*;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 import com.amazonaws.services.dynamodbv2.util.TableUtils;
-import com.amazonaws.services.dynamodbv2.model.AttributeDefinition;
-import com.amazonaws.services.dynamodbv2.model.AttributeValue;
-import com.amazonaws.services.dynamodbv2.model.Condition;
-import com.amazonaws.services.dynamodbv2.model.CreateTableRequest;
-import com.amazonaws.services.dynamodbv2.model.DescribeTableRequest;
-import com.amazonaws.services.dynamodbv2.model.KeySchemaElement;
-import com.amazonaws.services.dynamodbv2.model.KeyType;
-import com.amazonaws.services.dynamodbv2.model.ProvisionedThroughput;
-import com.amazonaws.services.dynamodbv2.model.PutItemRequest;
-import com.amazonaws.services.dynamodbv2.model.PutItemResult;
-import com.amazonaws.services.dynamodbv2.model.ScalarAttributeType;
-import com.amazonaws.services.dynamodbv2.model.ScanRequest;
-import com.amazonaws.services.dynamodbv2.model.ScanResult;
-import com.amazonaws.services.dynamodbv2.model.TableDescription;
+import com.amazonaws.services.dynamodbv2.document.Table;
+import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
+import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
+import com.amazonaws.services.dynamodbv2.document.*;
+
+
+import javax.management.Query;
+import java.util.Iterator;
+
 
 
 public class EC2Launch {
@@ -114,6 +113,7 @@ public class EC2Launch {
     // DynamoDB configurations
     public static String TABLE_NAME_DYNAMODB = "metrics-table";
     public static String PRIMARY_KEY_NAME_DYNAMODB = "identifier";
+    public static String INDEX_DYNAMODB = "ArgsIndex";
 
 
     // Empty or replaced when another instance created
@@ -166,10 +166,11 @@ public class EC2Launch {
     public static void main(String[] args) throws Exception {
         init();
         //createResources();
-        deleteResources();
+       // deleteResources();
         //startInstance();
 
         //createMSS();
+        readFromMss();
     }
 
     /**
@@ -545,22 +546,56 @@ public class EC2Launch {
         System.out.println("Creating MSS.");
 
         try {
-            // Create a table with a primary hash key named 'name', which holds a string
-            CreateTableRequest createTableRequest = new CreateTableRequest().withTableName(TABLE_NAME_DYNAMODB)
-                    .withKeySchema(new KeySchemaElement().withAttributeName(PRIMARY_KEY_NAME_DYNAMODB).withKeyType(KeyType.HASH))
-                    .withAttributeDefinitions(new AttributeDefinition().withAttributeName(PRIMARY_KEY_NAME_DYNAMODB).withAttributeType(ScalarAttributeType.S))
-                    .withProvisionedThroughput(new ProvisionedThroughput().withReadCapacityUnits(1L).withWriteCapacityUnits(1L));
+            DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
 
-            // Create table if it does not exist yet
-            TableUtils.createTableIfNotExists(dynamoDBClient, createTableRequest);
-            // wait for the table to move into ACTIVE state
-            TableUtils.waitUntilActive(dynamoDBClient, TABLE_NAME_DYNAMODB);
+            ArrayList<AttributeDefinition> attributeDefinitions = new ArrayList<AttributeDefinition>();
 
-            // Describe our new table
-            DescribeTableRequest describeTableRequest = new DescribeTableRequest().withTableName(TABLE_NAME_DYNAMODB);
-            TableDescription tableDescription = dynamoDBClient.describeTable(describeTableRequest).getTable();
-            System.out.println("Table Description: " + tableDescription);
+            attributeDefinitions.add(new AttributeDefinition()
+                    .withAttributeName("identifier")
+                    .withAttributeType("S")
+            );
 
+            attributeDefinitions.add(new AttributeDefinition()
+                    .withAttributeName("strategy")
+                    .withAttributeType("S")
+            );
+
+            ArrayList<KeySchemaElement> tableKeySchema = new ArrayList<KeySchemaElement>();
+
+            tableKeySchema.add(new KeySchemaElement()
+                    .withAttributeName("identifier")
+                    .withKeyType(KeyType.HASH)
+            );
+
+            ProvisionedThroughput pt = new ProvisionedThroughput()
+                    .withReadCapacityUnits((long) 5)
+                    .withWriteCapacityUnits((long) 1);
+
+            GlobalSecondaryIndex argsIndex = new GlobalSecondaryIndex()
+                    .withIndexName(INDEX_DYNAMODB)
+                    .withProvisionedThroughput(pt)
+                    .withProjection(new Projection()
+                            .withProjectionType(ProjectionType.ALL)
+                    );
+
+            ArrayList<KeySchemaElement> indexKeySchema = new ArrayList<KeySchemaElement>();
+            indexKeySchema.add(new KeySchemaElement()
+                    .withAttributeName("strategy")
+                    .withKeyType(KeyType.HASH)
+            );
+
+            argsIndex.setKeySchema(indexKeySchema);
+
+            CreateTableRequest createTableRequest = new CreateTableRequest()
+                    .withTableName(TABLE_NAME_DYNAMODB)
+                    .withProvisionedThroughput(pt)
+                    .withAttributeDefinitions(attributeDefinitions)
+                    .withKeySchema(tableKeySchema)
+                    .withGlobalSecondaryIndexes(argsIndex);
+
+            Table table = dynamoDB.createTable(createTableRequest);
+            System.out.println("MSS Created, waiting 10 seconds before inserting data...");
+            Thread.sleep(10000);
             insertInitialData();
         } catch (AmazonServiceException ase) {
             System.out.println("Caught an AmazonServiceException, which means your request made it "
@@ -570,14 +605,59 @@ public class EC2Launch {
             System.out.println("AWS Error Code:   " + ase.getErrorCode());
             System.out.println("Error Type:       " + ase.getErrorType());
             System.out.println("Request ID:       " + ase.getRequestId());
-        } catch (AmazonClientException ace) {
+        }
+        catch (AmazonClientException ace) {
             System.out.println("Caught an AmazonClientException, which means the client encountered "
                     + "a serious internal problem while trying to communicate with AWS, "
                     + "such as not being able to access the network.");
             System.out.println("Error Message: " + ace.getMessage());
-        } catch (InterruptedException ie) {
+        }
+        catch (InterruptedException ie) {
             System.out.println("Something about the TableUtils.WaitUntilActive");
         }
+    }
+
+    /**
+     * Function used to test the read from MSS
+     */
+    private static void readFromMss() {
+        try {
+            DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
+            Table table = dynamoDB.getTable(TABLE_NAME_DYNAMODB);
+
+            Index index = table.getIndex(INDEX_DYNAMODB);
+            ItemCollection<QueryOutcome> items = null;
+
+            QuerySpec querySpec = new QuerySpec();
+            querySpec.withKeyConditionExpression("strategy = :v_strategy")
+                    .withValueMap(new ValueMap()
+                            .withString(":v_strategy", "GRID")
+                    );
+
+            items = index.query(querySpec);
+
+            Iterator<Item> iterator = items.iterator();
+            items = index.query(querySpec);
+
+            while (iterator.hasNext()) {
+                System.out.println(iterator.next().toJSONPretty());
+            }
+
+        } catch (AmazonServiceException ase) {
+        System.out.println("Caught an AmazonServiceException, which means your request made it "
+                + "to AWS, but was rejected with an error response for some reason.");
+        System.out.println("Error Message:    " + ase.getMessage());
+        System.out.println("HTTP Status Code: " + ase.getStatusCode());
+        System.out.println("AWS Error Code:   " + ase.getErrorCode());
+        System.out.println("Error Type:       " + ase.getErrorType());
+        System.out.println("Request ID:       " + ase.getRequestId());
+    }
+        catch (AmazonClientException ace) {
+        System.out.println("Caught an AmazonClientException, which means the client encountered "
+                + "a serious internal problem while trying to communicate with AWS, "
+                + "such as not being able to access the network.");
+        System.out.println("Error Message: " + ace.getMessage());
+    }
     }
 
     /**
@@ -586,13 +666,13 @@ public class EC2Launch {
     private static void insertInitialData() throws AmazonClientException {
         // Add an item
         // arguments: width, height, x0, x1, y0, y1, xS, yS, strategy, input, cost
-        Map<String, AttributeValue> item = newItem("mock1", 512, 512, 0, 0, 128, 128, 10, 10, "GRID", "SIMPLE_VORONOI_512_512_1.png", 30000000);
+        Map<String, AttributeValue> item = newItem("mock1", 512, 512, 0, 0, 128, 128, 10, 10, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 30000000);
         PutItemRequest putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
         PutItemResult putItemResult = dynamoDBClient.putItem(putItemRequest);
         System.out.println("Result: " + putItemResult);
 
         // Add another item
-        item = newItem("mock2", 512, 512, 0, 0, 128, 128, 10, 10, "GRID", "SIMPLE_VORONOI_512_512_1.png", 50000000);
+        item = newItem("mock2", 512, 512, 0, 0, 128, 128, 10, 10, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 50000000);
         putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
         putItemResult = dynamoDBClient.putItem(putItemRequest);
         System.out.println("Result: " + putItemResult);
