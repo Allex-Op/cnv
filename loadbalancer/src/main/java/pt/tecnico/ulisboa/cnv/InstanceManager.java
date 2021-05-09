@@ -1,16 +1,24 @@
 package pt.tecnico.ulisboa.cnv;
 
+import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScaler;
+import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScalerAction;
+import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScalerActionEnum;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
+/**
+ * Class deals with the concurrent management of the
+ * instances.
+ */
 public class InstanceManager {
-    public static List<EC2Instance> instances = Collections.synchronizedList(new ArrayList<>());
+    private static List<EC2Instance> instances = new ArrayList<>();
 
+    static final Object lock = new Object();
 
     /**
      * It checks if all the instances registered
@@ -18,18 +26,21 @@ public class InstanceManager {
      * specified object should be deleted.
      */
     public static void checkInstancesHealthStatus() {
-        for (EC2Instance instance : instances) {
-            String url = Configs.urlBuild(instance.getInstanceIp());
-            boolean alive = sendHttpRequest(url + "health");
+        synchronized (lock) {
+            for (EC2Instance instance : instances) {
+                String url = Configs.urlBuild(instance.getInstanceIp()) + "health";
+                System.out.println("[Auto Scaler] Sending health check message to: " + url);
+                boolean alive = sendHttpRequest(url);
 
-            if(!alive) {
-                instance.incrementFailedHealthChecks();
-                if(instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
-                    System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
-                    instances.remove(instance);
+                if (!alive) {
+                    instance.incrementFailedHealthChecks();
+                    if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
+                        System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
+                        instances.remove(instance);
+                    }
+                } else {
+                    instance.setFailedHealthChecks(0);
                 }
-            } else {
-                instance.setFailedHealthChecks(0);
             }
         }
     }
@@ -46,6 +57,120 @@ public class InstanceManager {
         } catch (Exception e) {
             System.out.println("[Auto Scaler] Failed sending HTTP request (healthcheck). Instance unavailable.");
             return false;
+        }
+    }
+
+    public static EC2Instance searchInstanceWithEnoughResources(Job job) {
+        synchronized (lock) {
+            // First search for an instance that has resources to answer the request
+            for (EC2Instance instance : instances) {
+                // If instance not above processing threshold
+                if (instance.hasCapacityToProcess(job))
+                    return instance;
+            }
+            return null;
+        }
+    }
+
+    public static EC2Instance searchInstanceWithJobAlmostFinished(Job job) {
+        synchronized (lock) {
+            // If there is no instance to answer the request, see if any instance is almost done completing a job
+            for (EC2Instance instance : instances) {
+                if (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost < Configs.VM_PROCESSING_CAPACITY)
+                    return instance;
+            }
+            return null;
+        }
+    }
+
+    public static void terminateMarkedInstances() {
+        synchronized (lock) {
+            for (EC2Instance instance : instances) {
+                if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
+                    System.out.println("[Auto Scaler] Manually terminating instance without jobs and marked for termination.");
+                    instance.terminateInstance();
+                    instances.remove(instance);
+                }
+            }
+        }
+    }
+
+    public static void markForTermination(int marks) {
+        synchronized (lock) {
+            int currMarked = 0;
+            int fleetSize = instances.size();
+
+            for (EC2Instance instance : instances) {
+                if(instance.belowProcessingThreshold()) {
+
+                    // Constraint check
+                    if(fleetSize <= Configs.MINIMUM_CAPACITY) {
+                        System.out.println("[Auto Scaler] Can't mark anymore instances for termination, as it would bring the number below the minimum configured.");
+                        return;
+                    }
+
+                    // Only mark for termination if its not terminating already
+                    if(!instance.isMarkedForTermination()) {
+                        instance.setMarkedForTermination(true);
+                        currMarked++;
+                        fleetSize--;
+                        System.out.println("[Auto Scaler] Instance marked for termination.");
+                    }
+
+                    // It will mark X number of vm's for termination, this to avoid
+                    // terminating all vm's in case all are below the defined threshold
+                    if(currMarked == marks)
+                        return;
+                }
+            }
+        }
+    }
+
+    public static int getInstancesSize() {
+        synchronized (lock) {
+            return instances.size();
+        }
+    }
+
+    public static void addInstance(EC2Instance instance) {
+        synchronized (lock) {
+            instances.add(instance);
+        }
+    }
+
+    public static void removeInstance(EC2Instance instance) {
+        synchronized (lock) {
+            instances.remove(instance);
+        }
+    }
+
+    public static EC2Instance getInstance(int idx) {
+        synchronized (lock) {
+            return instances.get(idx);
+        }
+    }
+
+    protected static AutoScalerAction getInstancesSystemStatus() {
+        synchronized (lock) {
+            int fleetSize = instances.size();
+
+            if(fleetSize < Configs.MINIMUM_CAPACITY)
+                return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, Configs.MINIMUM_CAPACITY - fleetSize);
+
+            int instancesAboveThreshold = 0;
+            int instancesBelowThreshold = 0;
+
+            for (EC2Instance instance : instances) {
+                if(instance.aboveProcessingThreshold()) {
+                    // Before considering the VM as overwhelmed, check if it has any job that is almost complete
+                    if(instance.checkIfAnyJobIsAlmostDone() < EC2Instance.MAX_THRESHOLD_CAPACITY)
+                        instancesAboveThreshold++;
+                } else if(instance.belowProcessingThreshold()) {
+                    instancesBelowThreshold++;
+                }
+            }
+
+            return AutoScaler.decideAction(fleetSize, instancesAboveThreshold, instancesBelowThreshold);
         }
     }
 }

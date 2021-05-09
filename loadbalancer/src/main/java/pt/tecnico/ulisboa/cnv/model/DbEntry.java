@@ -14,7 +14,29 @@ public class DbEntry {
     String strategy;
     long cost;
 
+    boolean sameViewport = false;
+
+
     public DbEntry() {}
+
+    /**
+     *  Copy constructor to avoid the change of the
+     *  "isSameViewPort" on the wrong object...
+     */
+    public DbEntry(DbEntry entry) {
+        this.identifier = entry.identifier;
+        this.height = entry.height;
+        this.width = entry.width;
+        this.x0 = entry.x0;
+        this.x1 = entry.x1;
+        this.y0 = entry.y0;
+        this.y1 = entry.y1;
+        this.xS = entry.xS;
+        this.yS = entry.yS;
+        this.input = entry.input;
+        this.strategy = entry.strategy;
+        this.cost = entry.cost;
+    }
 
     public String getStrategy() {
         return strategy;
@@ -111,4 +133,13 @@ public class DbEntry {
     public void setInput(String input) {
         this.input = input;
     }
+
+    public void setSameViewport(boolean sameViewport) {
+        this.sameViewport = sameViewport;
+    }
+
+    public boolean isSameViewport() {
+        return sameViewport;
+    }
+
 }

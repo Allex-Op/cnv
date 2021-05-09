@@ -45,7 +45,14 @@ public class Job {
      */
     private long getExpectedCost(RequestArguments args) {
         DbEntry mostSimilarEntry = StorageAccess.getMostSimilarRequest(args);
-        return correctCost(mostSimilarEntry.getCost(), arguments.calculateViewPort());
+
+        // The cost of the request will only be corrected if its not exactly
+        // the same viewport.
+        if(!mostSimilarEntry.isSameViewport()) {
+            System.out.println("[Job] Applying a cost correction as the viewport of the most similar is different from current request.");
+            return correctCost(mostSimilarEntry.getCost(), arguments.calculateViewPort());
+        } else
+            return mostSimilarEntry.getCost();
     }
 
     /**
@@ -87,24 +94,26 @@ public class Job {
      *
      * Currently, we only do corrections on the viewport parameter.
      */
-    private long correctCost(long viewport, long mostSimilarCost) {
+    private long correctCost(long mostSimilarCost, long viewport) {
         // No correction needed for viewport argument when the value is one of values below, as there are already
         // default values in the MSS for them.
-        if(viewport == Configs.VIEWPORT_AREA_256 || viewport == Configs.VIEWPORT_AREA_512 || viewport == Configs.VIEWPORT_AREA_1024)
+        if(viewport == Configs.VIEWPORT_AREA_64 || viewport == Configs.VIEWPORT_AREA_128 || viewport == Configs.VIEWPORT_AREA_256 || viewport == Configs.VIEWPORT_AREA_512 || viewport == Configs.VIEWPORT_AREA_1024)
             return mostSimilarCost;
 
+        // TODO: THIS IS NOT CORRECT BUT CURRENT EQUATIONS WONT WORK OTHERWISE
+        double adequateViewPort = Math.sqrt(viewport);
         double deviation = 0;
-        if(arguments.getStrategy().contains("grid")) {
+        if(arguments.getStrategy().equals("GRID_SCAN")) {
 
             if(viewport > Configs.VIEWPORT_AREA_64 && viewport < Configs.VIEWPORT_AREA_256) {
-                deviation = 0.0003790 * viewport + 0.2667;
+                deviation = 0.0003790 * adequateViewPort + 0.2667;
             } else if(viewport > Configs.VIEWPORT_AREA_256) {
-                deviation = 0.0003815 * viewport;
+                deviation = 0.0003815 * adequateViewPort;
             }
 
         } else {
             if(viewport > Configs.VIEWPORT_AREA_512) {
-                deviation = 0.0001256 * viewport - 31.67;
+                deviation = 0.0001256 * adequateViewPort - 31.67;
             }
         }
 

@@ -4,16 +4,20 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Represents a web server running instance
  */
 public class EC2Instance {
     // Total processing capacity of the VM
-    public static long PROCESSING_CAPACITY = 100000000;
-    public static double MAX_THRESHOLD_CAPACITY = PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD;
+    public static double MAX_THRESHOLD_CAPACITY = Configs.VM_PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD;
 
     // Instance id
     private String id;
@@ -22,15 +26,21 @@ public class EC2Instance {
     private String ip;
 
     // Used to mark the instance as not accepting anymore requests
-    private boolean markedForTermination = false;
+    private AtomicBoolean markedForTermination = new AtomicBoolean(false);
 
     // Number of requests currently being processed by the instance
-    private int numberOfRequests = 0;
+    private AtomicInteger numberOfRequests = new AtomicInteger(0);
 
-    private int failedHealthChecks = 0;
+    private AtomicInteger failedHealthChecks = new AtomicInteger(0);
 
-    private long currentCapacity = 0;
-    private List<Job> runningJobs = new ArrayList<>();
+    private AtomicLong currentCapacity = new AtomicLong(0);
+    private List<Job> runningJobs = Collections.synchronizedList(new ArrayList<>());
+
+    private AtomicLong creationTimestamp = new AtomicLong(0);
+
+    public EC2Instance() {
+        this.creationTimestamp.set(System.currentTimeMillis());
+    }
 
     /**
      *  It sends the request to this web server and await
@@ -41,20 +51,39 @@ public class EC2Instance {
     public byte[] executeRequest(Job job, String query) {
         addJob(job);
 
+        isInstanceFresh();
+
         try {
-            String url = Configs.urlBuild(ip) + "scan?" + query;
-            System.out.println("[EC2 Instance] Sending request:" + url + ", to instance: " + id);
+            String url = Configs.urlBuild(getInstanceIp()) + "scan?" + query;
+            System.out.println("[EC2 Instance] Sending request: " + url + ", to instance: " + id);
 
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .build();
 
+            byte[] result = client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
             removeJob(job);
-            return client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
+            return result;
         } catch (Exception e) {
             System.out.println("[EC2 Instance] Failed obtaining result of request.");
             return new byte[] {};
+        }
+    }
+
+    /**
+     *  When a new requests demands the creation of a VM, the VM is not instantly ready and the
+     *  client must wait for it to become available or the request will fail.
+     */
+    private void isInstanceFresh() {
+        if(System.currentTimeMillis() - creationTimestamp.get() < Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE) {
+            try {
+                System.out.println("[EC2 Instance] Instance freshly created, waiting 20 seconds before sending the request..." + Instant.now().getEpochSecond());
+                Thread.sleep(Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE);
+                System.out.println("[EC2 Instance] Waking up, instance should be prepared by now..." + Instant.now().getEpochSecond());
+            } catch (InterruptedException e) {
+                System.out.println("[EC2 Instance] Waiting thread interrupted...");
+            }
         }
     }
 
@@ -80,14 +109,16 @@ public class EC2Instance {
      * Checks if any of the requests dispatched by the load balancer
      * is almost completing.
      *
-     * Returns the capacity of the web server after the job is completed.
+     * Returns the capacity of the web server after the jobs that
+     * are about to complete, complete.
      */
     public synchronized long checkIfAnyJobIsAlmostDone() {
+        long newCapacityAfterFreedJobs = currentCapacity.get();
         for (Job runningJob : runningJobs) {
             if(runningJob.isJobAlmostDone())
-                return currentCapacity - runningJob.expectedCost;
+                newCapacityAfterFreedJobs -= runningJob.expectedCost;
         }
-        return currentCapacity;
+        return newCapacityAfterFreedJobs;
     }
 
     /**
@@ -95,19 +126,12 @@ public class EC2Instance {
      * from the web server that is taking care of processing
      * the request.
      *
-     * In case it's the last job being processed by the VM it can
-     * also terminate the current EC2 instance.
      */
     private synchronized void removeJob(Job job) {
-        numberOfRequests--;
+        numberOfRequests.decrementAndGet();
         runningJobs.remove(job);
-        currentCapacity -= job.expectedCost;
-
-        // If the auto-scaler marked this instance for termination and the number
-        // of requests that is currently processing is 0, then the last job will
-        // terminate this instance.
-        if(markedForTermination && numberOfRequests == 0)
-            terminateInstance();
+        currentCapacity.set(currentCapacity.get() - job.expectedCost);
+        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
     }
 
     /**
@@ -115,8 +139,9 @@ public class EC2Instance {
      *  Decision taken by the load balancer.
      */
     private synchronized void addJob(Job job) {
-        numberOfRequests++;
-        currentCapacity += job.expectedCost;
+        numberOfRequests.incrementAndGet();
+        currentCapacity.set(currentCapacity.get() + job.expectedCost);
+        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
         runningJobs.add(job);
     }
 
@@ -125,7 +150,7 @@ public class EC2Instance {
      *  defined.
      */
     public synchronized boolean aboveProcessingThreshold() {
-        return currentCapacity > (PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD);
+        return currentCapacity.get() > (Configs.VM_PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD);
     }
 
     /**
@@ -133,7 +158,7 @@ public class EC2Instance {
      * used by the auto-scaler to decide which vm's to mark for termination.
      */
     public synchronized boolean belowProcessingThreshold() {
-        return currentCapacity < (PROCESSING_CAPACITY * Configs.BELOW_PROCESSING_THRESHOLD);
+        return currentCapacity.get() < (Configs.VM_PROCESSING_CAPACITY * Configs.BELOW_PROCESSING_THRESHOLD);
     }
 
     /**
@@ -149,42 +174,57 @@ public class EC2Instance {
     }
 
     public long getCurrentCapacity() {
-        return currentCapacity;
+        return currentCapacity.get();
     }
 
-    public String getInstanceIp() {
+    /**
+     *  The public IP address of the instance is loaded
+     *  lazily, because its not immediately available after
+     *  instance startup.
+     */
+    public synchronized String getInstanceIp() {
+        if(ip == null || ip.equals("")) {
+            ip = AwsHandler.getPublicIpOfInstance(id);
+            if(ip.equals(""))
+                System.out.println("[EC2 Instance] Couldn't obtain IP of the instance with ID: " + id);
+        }
+
         return ip;
     }
 
     public boolean isMarkedForTermination() {
-        return markedForTermination;
+        return markedForTermination.get();
     }
 
     public void setMarkedForTermination(boolean markedForTermination) {
-        this.markedForTermination = markedForTermination;
+        this.markedForTermination.set(markedForTermination);
     }
 
     public int getNumberOfRequests() {
-        return numberOfRequests;
+        return numberOfRequests.get();
     }
 
     public void setFailedHealthChecks(int failedHealthChecks) {
-        this.failedHealthChecks = failedHealthChecks;
+        this.failedHealthChecks.set(failedHealthChecks);
     }
 
     public int getFailedHealthChecks() {
-        return failedHealthChecks;
+        return failedHealthChecks.get();
     }
 
     public void incrementFailedHealthChecks() {
-        failedHealthChecks++;
+        failedHealthChecks.incrementAndGet();
     }
 
     public boolean hasCapacityToProcess(Job job) {
-        return currentCapacity + job.expectedCost < PROCESSING_CAPACITY;
+        return currentCapacity.get() + job.expectedCost < Configs.VM_PROCESSING_CAPACITY;
     }
 
     public static double getMaxThresholdCapacity() {
         return MAX_THRESHOLD_CAPACITY;
+    }
+
+    public long getCreationTimestamp() {
+        return creationTimestamp.get();
     }
 }

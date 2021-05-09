@@ -7,7 +7,9 @@ public class LbStrategy extends InstanceManager {
      *  algorithms.
      */
     public static byte[] distributeRequest(Job job, String query) {
+        System.out.println("[Lb Strategy] Distributing a new request: " + query);
         EC2Instance ec2 = selectInstance(job);
+        System.out.println("[Lb Strategy] Found an available instance to process the request: " + query);
         return ec2.executeRequest(job, query);
     }
 
@@ -25,22 +27,42 @@ public class LbStrategy extends InstanceManager {
      *
      */
     private synchronized static EC2Instance selectInstance(Job job) {
+        int waitingRounds = 0;
+        EC2Instance inst = null;
         while(true) {
-            // First search for an instance that has resources to answer the request
-            for (EC2Instance instance : instances) {
-                // If instance not above processing threshold
-                if (instance.hasCapacityToProcess(job))
-                    return instance;
+            // Some requests will exceed anyway the capacity of a VM, this request will be
+            // looped forever and stop everything else if its not handled.
+            if(waitingRounds == Configs.MAX_WAITING_ROUNDS || job.expectedCost > Configs.VM_PROCESSING_CAPACITY) {
+                // But what if we reached max capacity vm's already? We can't allow to keep growing or an attacker
+                // could spawn many vm's uncontrollably...
+                System.out.println("[LbStrategy Part 1] A request that exceeds VM capacity, or that has been waiting for too long appeared...");
+                if (InstanceManager.getInstancesSize() >= Configs.MAXIMUM_CAPACITY) {
+                    System.out.println("[LbStrategy Part 2] The request can't create a new VM as max fleet size has been achieved, distributing randomly.");
+                    // Can't do anything else except pray and spray. An unlucky random VM will be overwhelmed, but
+                    // it's better than blocking the whole load balancer.
+
+                    return InstanceManager.getInstance(0);
+                } else {
+                    System.out.println("[LbStrategy Part 2] The request will create a new VM as the current fleet size is smaller than the maximum configured.");
+
+                    inst = new EC2Instance();
+                    inst.startInstance();
+                    InstanceManager.addInstance(inst);
+                    return inst;
+                }
             }
 
-            // If there is no instance to answer the request, see if any instance is almost done completing a job
-            for (EC2Instance instance : instances) {
-                if (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost < EC2Instance.PROCESSING_CAPACITY)
-                    return instance;
-            }
+            inst = InstanceManager.searchInstanceWithEnoughResources(job);
+            if(inst != null)
+                return inst;
 
-            // Sleep for 1 second, there is no point in instantly checking for free instances.
+            inst = InstanceManager.searchInstanceWithJobAlmostFinished(job);
+            if(inst != null)
+                return inst;
+
+            // No instances available, sleep for 1 second, there is no point in instantly checking for free instances.
             try {
+                waitingRounds++;
                 Thread.sleep(1000);
             } catch(InterruptedException e) {}
         }

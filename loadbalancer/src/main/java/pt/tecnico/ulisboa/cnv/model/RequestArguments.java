@@ -28,15 +28,15 @@ public class RequestArguments {
             newArgs.add(splitParam[1]);
         }
 
-        width = Integer.parseInt(params[0]);
-        height = Integer.parseInt(params[1]);
-        x0 = Integer.parseInt(params[2]);
-        x1 = Integer.parseInt(params[3]);
-        y0 = Integer.parseInt(params[4]);
-        y1 = Integer.parseInt(params[5]);
-        xS = Integer.parseInt(params[6]);
-        yS = Integer.parseInt(params[7]);
-        strategy = params[8];
+        width = Integer.parseInt(newArgs.get(0));
+        height = Integer.parseInt(newArgs.get(1));
+        x0 = Integer.parseInt(newArgs.get(2));
+        x1 = Integer.parseInt(newArgs.get(3));
+        y0 = Integer.parseInt(newArgs.get(4));
+        y1 = Integer.parseInt(newArgs.get(5));
+        xS = Integer.parseInt(newArgs.get(6));
+        yS = Integer.parseInt(newArgs.get(7));
+        strategy = newArgs.get(8);
     }
 
     public int calculateViewPort()

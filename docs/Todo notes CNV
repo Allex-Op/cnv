@@ -1,19 +1,17 @@
-Todo notes CNV:
-
-- MSS esta a repetir entradas para pedidos iguais, talvez meter algo para evitar entradas duplicadas
-- Implementar LB
-    - Initial data fill no MSS
-    - Handler LB
-    - LB Strategy
-    - implementar concurrência da lista de instância pelo auto-scaler e lb strategy
-    - Healthcheck, instâncias podem morrer mas continuar marcadas no LB como funcionais.
-    - Testar 
-
-
 Todo after:
-- Entradas repetidas no MSS 
-- Mensagens queued ser dispatched para web servers (caguei)
 - Query aos web servers periodica & alterar web server para poder ler essa info (id pedido) e introduzir esse id (adicionado pelo lb) na resposta talvez como header ou simplesmente eliminar? 
+
+
+Could get some improvements:
+- findMostSimilar no storageAccess
+- AutoScaler decideAction
+- correctCost
+- selectInstance because of the multithreading block 
+- concurrência em geral
+- Entradas repetidas no MSS 
+- o startup do lb cria sempre 2 instâncias, pq n verifica no aws se ja existem
+
+
 
 
 Report:
@@ -60,3 +58,240 @@ cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "
 ab -n 1 -c 1 -s 500 "http://3.21.105.6:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
 http://cnv-lb-2108617815.us-east-2.elb.amazonaws.com/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
 http://cnv-lb-2108617815.us-east-2.elb.amazonaws.com/scan?w=2048&h=2048&x0=512&x1=1536&y0=512&y1=1536&xS=1024&yS=1024&s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_2048x2048_8.png
+
+
+
+Database mock data:
+GRID_SCAN:
+viewport 64:
+ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/
+scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of basic blocks: 2097721
+Number of executed instructions: 6098669
+Total number of branches to check:903278
+New count: 0
+Field load count: 0
+Field store count: 0
+
+cost = 6098669 + 903278 * 2 = 7 905 225
+
+
+viewport 128:
+ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/
+scan?w=512&h=512&x0=0&x1=128&y0=0&y1=128&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of basic blocks: 9221305
+Number of executed instructions: 26371693
+Total number of branches to check:3831214
+New count: 0
+Field load count: 0
+Field store count: 0
+
+cost = 26371693 + 3831214 * 2 = 34 034 121
+
+viewport 256:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=256&y0=0&y1=256&xS=1&yS=2&s=GRID_SCAN
+&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of basic blocks: 37206457
+Number of executed instructions: 105035117
+Total number of branches to check:15093806
+New count: 0
+Field load count: 0
+Field store count: 0
+
+cost = 105035117 + 15093806 * 2 = 135 222 729
+
+viewport 512:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=GRID_SCAN
+&i=SIMPLE_VORONOI_1024x1024_1.png"
+
+
+Number of basic blocks: 326085275
+Number of executed instructions: 923811478
+Total number of branches to check:132959000
+New count: 0
+Field load count: 0
+Field store count: 0
+
+cost = 923811478 + 132959000 * 2 = 1 189 729 478
+
+viewport 1024:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=2048&h=2048&x0=0&x1=1024&y0=0&y1=1024&xS=1&yS=2&s=GRID_SCAN
+&i=SIMPLE_VORONOI_2048x2048_1.png"
+
+Everything above this viewport will overflow the long variables...
+cost = 200 000 000
+
+
+
+
+
+
+
+
+PROGRESSIVE_SCAN
+
+viewport 64:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&
+s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of executed instructions: 366733
+Total number of branches to check:26781
+New count: 4395
+Field load count: 66636
+Field store count: 0
+
+cost = 366733 + 26781 * 2 + 4395 * 15 + 66636 * 10 = 1 152 580
+
+
+viewport 128:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=128&y0=0&y1=128&xS=1&yS=2
+&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of executed instructions: 366733
+Total number of branches to check:26781
+New count: 6500
+Field load count: 90000
+Field store count: 0
+
+cost = 406733 + 30781 * 2 + 6500 * 15 + 90000 * 10 = 1 465 795
+
+
+viewport 256:
+ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=256&y0=0&y1=256&xS=200
+&yS=100&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+
+Number of basic blocks: 233046
+Number of executed instructions: 818230
+Total number of branches to check:59716
+New count: 9824
+Field load count: 148714
+Field store count: 0
+
+cost = 818230 + 59716 * 2 + 9824 * 15 + 148714 * 10 = 2 572 162
+
+
+viewport 512:
+ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png"
+
+
+
+Number of basic blocks: 415980
+Number of executed instructions: 1460365
+Total number of branches to check:106475
+New count: 17578
+Field load count: 265424
+Field store count: 0
+
+cost = 1460365 + 106475 * 2 + 17578 * 15 + 265424 * 10 = 4 591 225
+
+
+viewport 1024:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=2048&h=2048&x0=0&x1=1024&y0=0&y1=1024&xS=1&yS=2
+&s=PROGRESSIVE_SCAN&i=SIMPLE_VORONOI_2048x2048_1.png"
+
+
+Number of executed instructions: 20770921
+Total number of branches to check:1511709
+New count: 251259
+Field load count: 3776148
+Field store count: 0
+
+cost = 20770921 + 1511709 * 2 + 251259 * 15 + 3776148 * 10 = 65 324 704
+
+
+
+
+
+
+
+
+
+GREEDY_RANGE_SCAN
+viewport 64:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=10&yS=20&
+s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of executed instructions: 221718
+Total number of branches to check:15476
+New count: 2631
+Field load count: 37513
+Field store count: 46
+
+cost = 221718 + 15476 * 2 + 2631 * 15 + 37513 * 10 + 46 * 10 = 667 725
+
+viewport 128:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=128&y0=0&y1=128&xS=10&yS=20&
+s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of executed instructions: 231955
+Total number of branches to check:16209
+New count: 2814
+Field load count: 39241
+Field store count: 84
+
+cost = 231955 + 16209 * 2 + 2814 * 15 + 39241 * 10 + 84 * 10 = 699 833
+
+
+viewport 256:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=256&y0=0&y1=256&xS=30&yS=50&
+s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+
+
+Number of executed instructions: 316431
+Total number of branches to check:22032
+New count: 4046
+Field load count: 54583
+Field store count: 148
+
+cost = 316431 + 22032 * 2 + 4046 * 15 + 54583 * 10 + 148 * 10 = 968 495
+
+
+viewport 512:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=50&yS=70&
+s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png"
+
+
+Number of executed instructions: 1183371
+Total number of branches to check:82171
+New count: 14668
+Field load count: 205349
+Field store count: 164
+
+cost = 1183371 + 82171 * 2 + 14668 * 15 + 205349 * 10 + 164 * 10 = 3 622 863
+
+
+viewport 1024:
+ab -n 1 -c 1 -s 500 
+"http://127.0.0.1:8000/scan?w=2048&h=2048&x0=0&x1=1024&y0=0&y1=1024&xS=185&yS=185&
+s=GREEDY_RANGE_SCAN&i=SIMPLE_VORONOI_2048x2048_1.png"
+
+
+Number of executed instructions: 12930913
+Total number of branches to check:898724
+New count: 156081
+Field load count: 2226219
+Field store count: 180
+
+cost = 12930913 + 898724 * 2 + 156081 * 15 + 2226219 * 10 + 180 * 10 = 39 333 566

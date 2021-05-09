@@ -73,9 +73,14 @@ public class WebServer {
 	}
 
 	public static void main(final String[] args) throws Exception {
-		if(args.length > 0)
-			if(args[0].equals("local"))
+		for (String arg : args) {
+			System.out.println(arg);
+		}
+		if(args.length == 5)
+			if(args[4].equals("local")) {
+				System.out.println("Local mode");
 				local = true;
+			}
 
 		try {
 			initAws();

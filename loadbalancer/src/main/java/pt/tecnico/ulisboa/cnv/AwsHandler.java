@@ -14,10 +14,7 @@ import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.RunInstancesRequest;
-import com.amazonaws.services.ec2.model.RunInstancesResult;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.ec2.model.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import pt.tecnico.ulisboa.cnv.model.DbEntry;
 
@@ -36,6 +33,7 @@ public class AwsHandler {
     static AmazonDynamoDB dynamoDBClient;
 
     public static void init() {
+        System.out.println("[AwsHandler] Initializing credentials...");
         // Credentials must be at ~/.aws/credentials
         try {
             credentials = new ProfileCredentialsProvider().getCredentials();
@@ -60,7 +58,7 @@ public class AwsHandler {
 
     public static String[] createEC2Instance() {
         try {
-            System.out.println("Starting instance...");
+            System.out.println("[AwsHandler] Starting EC2 instance...");
 
             RunInstancesRequest runInstancesRequest = new RunInstancesRequest();
             runInstancesRequest.withImageId(Configs.AMI_ID)
@@ -73,10 +71,11 @@ public class AwsHandler {
 
             RunInstancesResult runInstancesResult = ec2.runInstances(runInstancesRequest);
             Instance inst = runInstancesResult.getReservation().getInstances().get(0);
-            String newInstanceId = inst.getInstanceId();
-            String newInstancePublicIp = inst.getPublicIpAddress();
 
-            System.out.println("Instance started with id: " + newInstanceId);
+            String newInstancePublicIp = inst.getPublicIpAddress();
+            String newInstanceId = inst.getInstanceId();
+
+            System.out.println("[AwsHandler] Instance started with id: " + newInstanceId);
             return new String[] { newInstanceId, newInstancePublicIp };
         } catch (AmazonServiceException ase) {
             System.out.println("Caught Exception: " + ase.getMessage());
@@ -89,10 +88,25 @@ public class AwsHandler {
     }
 
     public static void terminateEC2Instance(String instanceId) {
-        System.out.println("Terminating instance with id: " + instanceId);
+        System.out.println("[AwsHandler] Terminating instance with id: " + instanceId);
         TerminateInstancesRequest termInstanceReq = new TerminateInstancesRequest();
         termInstanceReq.withInstanceIds(instanceId);
         ec2.terminateInstances(termInstanceReq);
+    }
+
+    public static String getPublicIpOfInstance(String instanceId) {
+        DescribeInstancesRequest request = new DescribeInstancesRequest();
+        DescribeInstancesResult response = ec2.describeInstances(request);
+
+        for (Reservation reservation : response.getReservations()) {
+            for (Instance instance : reservation.getInstances()) {
+                if(instance.getInstanceId().equals(instanceId)) {
+                    return instance.getPublicIpAddress();
+                }
+            }
+        }
+
+        return "";
     }
 
     public static void writeToMss() {
@@ -109,6 +123,8 @@ public class AwsHandler {
      */
     public static List<DbEntry> readFromMss(String strategy) {
         try {
+            System.out.println("[AwsHandler] Reading from MSS entries with strategy: " + strategy);
+
             DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
             Table table = dynamoDB.getTable(Configs.TABLE_NAME_DYNAMODB);
 
@@ -134,6 +150,7 @@ public class AwsHandler {
                 dbEntries.add(entry);
             }
 
+            System.out.println("[AwsHandler] Retrieved " + dbEntries.size() + " entries from the MSS.");
             return dbEntries;
         } catch (AmazonServiceException ase) {
             System.out.println("Caught an AmazonServiceException, which means your request made it "

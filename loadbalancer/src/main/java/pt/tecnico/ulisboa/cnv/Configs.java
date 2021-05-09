@@ -53,4 +53,8 @@ public class Configs {
 
     public static int PORT = 8000;
     public static int MAX_FAILED_HEALTH_CHECKS = 3;
+    public static int MAX_WAITING_ROUNDS = 5;
+    public static long VM_PROCESSING_CAPACITY = 100000000;
+    public static long WAIT_TIME_BEFORE_INSTANCE_AVAILABLE = 20000;
+
 }

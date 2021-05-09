@@ -170,7 +170,8 @@ public class EC2Launch {
         //startInstance();
 
         //createMSS();
-        readFromMss();
+        //readFromMss();
+        insertInitialData();
     }
 
     /**
@@ -622,6 +623,8 @@ public class EC2Launch {
      */
     private static void readFromMss() {
         try {
+            System.out.println("Reading from MSS...");
+
             DynamoDB dynamoDB = new DynamoDB(dynamoDBClient);
             Table table = dynamoDB.getTable(TABLE_NAME_DYNAMODB);
 
@@ -631,7 +634,7 @@ public class EC2Launch {
             QuerySpec querySpec = new QuerySpec();
             querySpec.withKeyConditionExpression("strategy = :v_strategy")
                     .withValueMap(new ValueMap()
-                            .withString(":v_strategy", "GRID")
+                            .withString(":v_strategy", "GRID_SCAN")
                     );
 
             items = index.query(querySpec);
@@ -664,15 +667,101 @@ public class EC2Launch {
      *  Inserts initial DB data
      */
     private static void insertInitialData() throws AmazonClientException {
-        // Add an item
-        // arguments: width, height, x0, x1, y0, y1, xS, yS, strategy, input, cost
-        Map<String, AttributeValue> item = newItem("mock1", 512, 512, 0, 0, 128, 128, 10, 10, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 30000000);
+        /**
+         * Insert GRID algorithms
+         */
+        // Viewport 64
+        Map<String, AttributeValue> item = newItem("1", 512, 512, 0, 64, 0, 64, 1, 2, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 7905225);
         PutItemRequest putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
         PutItemResult putItemResult = dynamoDBClient.putItem(putItemRequest);
         System.out.println("Result: " + putItemResult);
 
-        // Add another item
-        item = newItem("mock2", 512, 512, 0, 0, 128, 128, 10, 10, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 50000000);
+        // Viewport 128
+        item = newItem("2", 512, 512, 0, 128,0, 128, 1, 2, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 34034121);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 256, tudo acima desse viewport vai ter mais requirement de processamento do que capacidade de VM
+        item = newItem("3", 512, 512, 0, 256, 0, 256, 1, 2, "GRID_SCAN", "SIMPLE_VORONOI_512_512_1.png", 200000000);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 512, tudo acima desse viewport vai ter mais requirement de processamento do que capacidade de VM
+        item = newItem("4", 1024, 1024, 0, 512, 0, 512, 1, 2, "GRID_SCAN", "SIMPLE_VORONOI_1024_1024_1.png", 200000000);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 1024, tudo acima desse viewport vai ter mais requirement de processamento do que capacidade de VM
+        item = newItem("5", 2048, 2048, 0, 1024, 0, 1024, 1, 2, "GRID_SCAN", "SIMPLE_VORONOI_2048_2048_1.png", 200000000);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+
+        /**
+         * Insert PROGRESSIVE algorithms
+         */
+        // Viewport 64
+        item = newItem("6", 512, 512, 0, 64, 128, 64, 1, 2, "PROGRESSIVE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 1152580);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 128
+        item = newItem("7", 512, 512, 0, 128,0, 128, 1, 2, "PROGRESSIVE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 1465795);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 256,
+        item = newItem("8", 512, 512, 0, 256, 128, 256, 200, 100, "PROGRESSIVE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 2572162);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 512
+        item = newItem("9", 1024, 1024, 0, 512, 0, 512, 1, 2, "PROGRESSIVE_SCAN", "SIMPLE_VORONOI_1024_1024_1.png", 4591225);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 1024
+        item = newItem("10", 2048, 2048, 0, 1024, 0, 1024, 1, 2, "PROGRESSIVE_SCAN", "SIMPLE_VORONOI_2048_2048_1.png", 65324704);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        /**
+         * Insert GREEDY algorithms
+         */
+        item = newItem("11", 512, 512, 0, 64, 128, 64, 10, 20, "GREEDY_RANGE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 667725);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 128
+        item = newItem("12", 512, 512, 0, 128,0, 128, 10, 20, "GREEDY_RANGE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 699833);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 256,
+        item = newItem("13", 512, 512, 0, 256, 128, 256, 30, 50, "GREEDY_RANGE_SCAN", "SIMPLE_VORONOI_512_512_1.png", 968495);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 512
+        item = newItem("14", 1024, 1024, 0, 512, 0, 512, 50, 70, "GREEDY_RANGE_SCAN", "SIMPLE_VORONOI_1024_1024_1.png", 3622863);
+        putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
+        putItemResult = dynamoDBClient.putItem(putItemRequest);
+        System.out.println("Result: " + putItemResult);
+
+        // Viewport 1024
+        item = newItem("15", 2048, 2048, 0, 1024, 0, 1024, 185, 185, "GREEDY_RANGE_SCAN", "SIMPLE_VORONOI_2048_2048_1.png", 39333566);
         putItemRequest = new PutItemRequest(TABLE_NAME_DYNAMODB, item);
         putItemResult = dynamoDBClient.putItem(putItemRequest);
         System.out.println("Result: " + putItemResult);

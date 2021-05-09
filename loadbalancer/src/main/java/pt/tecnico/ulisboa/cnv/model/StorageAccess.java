@@ -52,27 +52,39 @@ public class StorageAccess {
      *  parameters in common that each entry has with the current
      *  arguments. Although, the viewport parameter is more critical
      *  than the others, therefore it will be counted as 3 parameters in common.
+     *
+     *  TODO: In case no similar one is found the first entry is returned, of course this
+     *  is not the most efficient way to do it. Some more comparisons could be added.
+     *
      */
     private static DbEntry findMostSimilar(List<DbEntry> entries, RequestArguments args) {
-        DbEntry mostSimilar = entries.get(0);
+        DbEntry mostSimilar = new DbEntry(entries.get(0));
+
         int equalArgs = 0;
         for (DbEntry entry : entries) {
             int currEqualArgs = 0;
             int currEntryViewPort = (entry.x1 - entry.x0) * (entry.y1 - entry.y0);
+            boolean sameViewPort = false;
 
             if(entry.height == args.getHeight())
                 currEqualArgs++;
             if(entry.width == args.getWidth())
                 currEqualArgs++;
-            if(currEntryViewPort == args.calculateViewPort())
+            if(currEntryViewPort == args.calculateViewPort()) {
                 currEqualArgs += 3;
-            if(entry.input.equals(args.getInput()))
+                sameViewPort = true;
+            } if(entry.input.equals(args.getInput()))
                 currEqualArgs++;
             if(entry.xS == args.getxS() && entry.yS == args.getyS())
                 currEqualArgs++;
 
             if(currEqualArgs > equalArgs) {
                 mostSimilar = entry;
+                if(sameViewPort) {
+                    mostSimilar = new DbEntry(entry);
+                    mostSimilar.setSameViewport(true);
+                }
+
                 equalArgs = currEqualArgs;
             }
         }

@@ -18,6 +18,7 @@ public class LoadBalancerApplication {
         }
 
         try {
+            System.out.println("Application starting...");
             AwsHandler.init();
             AutoScalerThread as = new AutoScalerThread();
             as.start();
@@ -31,6 +32,7 @@ public class LoadBalancerApplication {
 
             System.out.println(server.getAddress().toString());
         } catch(Exception e) {
+            System.out.println(e.getMessage());
             System.out.println("Server error");
         }
     }
