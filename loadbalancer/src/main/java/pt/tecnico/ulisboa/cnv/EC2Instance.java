@@ -16,9 +16,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * Represents a web server running instance
  */
 public class EC2Instance {
-    // Total processing capacity of the VM
-    public static double MAX_THRESHOLD_CAPACITY = Configs.VM_PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD;
-
     // Instance id
     private String id;
 
@@ -54,7 +51,7 @@ public class EC2Instance {
         isInstanceFresh();
 
         try {
-            String url = Configs.urlBuild(getInstanceIp()) + "scan?" + query;
+            String url = Configs.urlBuild(getInstanceIp()) + "scan?" + query + "&requestId=" + job.id;
             System.out.println("[EC2 Instance] Sending request: " + url + ", to instance: " + id);
 
             HttpClient client = HttpClient.newHttpClient();
@@ -101,13 +98,13 @@ public class EC2Instance {
      * Code called by the auto-scaler when it decides
      * to cut the fleet power.
      */
-    public void terminateInstance() {
+    public synchronized void terminateInstance() {
         AwsHandler.terminateEC2Instance(id);
     }
 
     /**
      * Checks if any of the requests dispatched by the load balancer
-     * is almost completing.
+     * is almost completing (by observing the executed metrics).
      *
      * Returns the capacity of the web server after the jobs that
      * are about to complete, complete.
@@ -149,7 +146,7 @@ public class EC2Instance {
      *  Returns true if the current instance is above the processing threshold
      *  defined.
      */
-    public synchronized boolean aboveProcessingThreshold() {
+    public boolean aboveProcessingThreshold() {
         return currentCapacity.get() > (Configs.VM_PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD);
     }
 
@@ -157,7 +154,7 @@ public class EC2Instance {
      * Checks if the current capacity of the VM is below the 25% mark threshold,
      * used by the auto-scaler to decide which vm's to mark for termination.
      */
-    public synchronized boolean belowProcessingThreshold() {
+    public boolean belowProcessingThreshold() {
         return currentCapacity.get() < (Configs.VM_PROCESSING_CAPACITY * Configs.BELOW_PROCESSING_THRESHOLD);
     }
 
@@ -179,7 +176,7 @@ public class EC2Instance {
 
     /**
      *  The public IP address of the instance is loaded
-     *  lazily, because its not immediately available after
+     *  lazily because its not immediately available after
      *  instance startup.
      */
     public synchronized String getInstanceIp() {
@@ -212,19 +209,60 @@ public class EC2Instance {
         return failedHealthChecks.get();
     }
 
+    /**
+     * Incremented by the auto-scaler when the instance failed to answer
+     * an health check request.
+     */
     public void incrementFailedHealthChecks() {
         failedHealthChecks.incrementAndGet();
     }
 
+    /**
+     *   Checks if this instance can process another request (Job).
+     */
     public boolean hasCapacityToProcess(Job job) {
-        return currentCapacity.get() + job.expectedCost < Configs.VM_PROCESSING_CAPACITY;
-    }
-
-    public static double getMaxThresholdCapacity() {
-        return MAX_THRESHOLD_CAPACITY;
+        return (currentCapacity.get() + job.expectedCost) < Configs.MAX_THRESHOLD_CAPACITY;
     }
 
     public long getCreationTimestamp() {
         return creationTimestamp.get();
+    }
+
+    /**
+     * Queries the executed metrics of all jobs
+     * that have an higher cost than 5% of the VM capacity.
+     */
+    public void queryExecutedMetrics() {
+        for (Job runningJob : runningJobs) {
+            if(runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
+                String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
+                System.out.println("[Instance Manager] Sending executed metrics query to: " + url);
+
+                String response = sendExecutedMetricsHttpRequest(url);
+
+                // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
+                // for some reason. (It could be that the thread stats are not existent anymore for this job or
+                // wasn't able to contact the web server)
+                if(response.equals("")) {
+                    continue;
+                } else {
+                    runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
+                }
+            }
+        }
+    }
+
+    private String sendExecutedMetricsHttpRequest(String url) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .build();
+
+            return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+        } catch (Exception e) {
+            System.out.println("[Instance Manager] Failed sending the executed metrics query: " + e.getMessage());
+            return "";
+        }
     }
 }

@@ -16,6 +16,7 @@ import java.util.HashMap;
 
 import java.util.UUID;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 import com.sun.net.httpserver.Headers;
@@ -45,8 +46,6 @@ import com.amazonaws.services.dynamodbv2.model.PutItemResult;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
 
-
-
 public class WebServer {
 
 	static AWSCredentials credentials = null;
@@ -54,7 +53,11 @@ public class WebServer {
 
 	static ServerArgumentParser sap = null;
 
+	// Used locally if we don't want to send the metrics to the MSS
 	static Boolean local = false;
+
+	// Associates a request id with a thread id to obtain the metrics of the executed request
+	static ConcurrentHashMap<String, Long> requestIdToThreadMap = new ConcurrentHashMap<String, Long>();
 
 	private static void initAws() throws Exception {
 		// Vai tentar ler as credenciais localizadas em ~/.aws/credentials
@@ -76,15 +79,16 @@ public class WebServer {
 		for (String arg : args) {
 			System.out.println(arg);
 		}
-		if(args.length == 5)
-			if(args[4].equals("local")) {
+
+		if(args.length == 5) {
+			if (args[4].equals("local")) {
 				System.out.println("Local mode");
 				local = true;
 			}
+		}
 
 		try {
 			initAws();
-
 			// Get user-provided flags.
 			WebServer.sap = new ServerArgumentParser(args);
 		}
@@ -99,10 +103,9 @@ public class WebServer {
 
 		final HttpServer server = HttpServer.create(new InetSocketAddress(WebServer.sap.getServerAddress(), WebServer.sap.getServerPort()), 0);
 
-
-
 		server.createContext("/scan", new MyHandler());
 		server.createContext("/health", new HealthHandler());
+		server.createContext("/metrics", new ExecutedMetricsHandler());
 
 		// be aware! infinite pool of threads!
 		server.setExecutor(Executors.newCachedThreadPool());
@@ -111,10 +114,36 @@ public class WebServer {
 		System.out.println(server.getAddress().toString());
 	}
 
-	static class HealthHandler implements HttpHandler {
+	/**
+	 * Returns current information on executed metrics of a certain
+	 * request.
+	 */
+	static class ExecutedMetricsHandler implements HttpHandler {
 		@Override
 		public void handle(final HttpExchange t) throws IOException {
-			String response = "I am alive?";
+			// Get the query.
+			final String query = t.getRequestURI().getQuery();
+
+			System.out.println("> Query:\t" + query);
+
+			// Break it down into String[].
+			final String[] params = query.split("=");
+
+			// Id of the request we want metrics from
+			String requestId = params[1];
+			long threadId = requestIdToThreadMap.get(requestId);
+
+			// Obtain the metrics
+			PerThreadStats stats = StatisticsTool.getThreadStats(Long.toString(threadId));
+
+			// Build response with the metrics
+			String response = "";
+			if(stats != null)
+				response = "instructions=" + stats.dyn_instr_count + "&branches=" + stats.branch_checks +
+						"&newcount=" + stats.newcount + "&fieldloadcount=" + stats.fieldloadcount +
+						"&fieldstorecount=" + stats.fieldstorecount;
+
+			// Send response
 			t.sendResponseHeaders(200, response.length());
 			OutputStream os = t.getResponseBody();
 			os.write(response.getBytes());
@@ -122,14 +151,28 @@ public class WebServer {
 		}
 	}
 
+	/**
+	 * Executes the request and return the solution
+	 */
 	static class MyHandler implements HttpHandler {
 		@Override
 		public void handle(final HttpExchange t) throws IOException {
-
 			// Get the query.
-			final String query = t.getRequestURI().getQuery();
+			String query = t.getRequestURI().getQuery();
+
+			// Get request Id
+			int lastParameterIdx = query.lastIndexOf("&");
+			String lastParameterValue = query.substring(lastParameterIdx+1, query.length());
+			String requestId = lastParameterValue.split("=")[1];
+
+			System.out.println("> Forgot to add the option requestId");
+
+			// Remove request Id before being processed as its an unknown property and throws exception
+			query = query.substring(0, lastParameterIdx);
 
 			System.out.println("> Query:\t" + query);
+			System.out.println("> Request Id:\t" + requestId);
+
 
 			// Break it down into String[].
 			final String[] params = query.split("&");
@@ -186,11 +229,19 @@ public class WebServer {
 			// Write figure file to disk.
 			File responseFile = null;
 			try {
+				// TODO: Register an association between the thread Id and request Id, so the Lb can later query
+				// the current executed metrics
+				long currentThreadId = Thread.currentThread().getId();
+				requestIdToThreadMap.putIfAbsent(requestId, currentThreadId);
+
 				// solve problem
 				final BufferedImage outputImg = s.solveImage();
 
 				// Log the metrics generated
-				logMetrics(newArgs, Thread.currentThread().getId());
+				logMetrics(newArgs, currentThreadId);
+
+				// Remove requestId - threadId hashmap association
+				requestIdToThreadMap.remove(requestId);
 
 				final String outPath = WebServer.sap.getOutputDirectory();
 
@@ -244,6 +295,7 @@ public class WebServer {
 					System.out.println("Couldn't get the metrics for this request, an error ocurred.");
 					return;
 				}
+
 				String dir = System.getProperty("user.dir");
 				System.out.println("Saving metrics to:"+dir);
 				String algorithmUsed = newArgs.get(17);
@@ -335,6 +387,21 @@ public class WebServer {
 			UUID uuid = UUID.randomUUID();
 			String uuidAsString = uuid.toString();
 			return uuidAsString;
+		}
+
+	}
+
+	/**
+	 * Health check handler used by the auto-scaler
+	 */
+	static class HealthHandler implements HttpHandler {
+		@Override
+		public void handle(final HttpExchange t) throws IOException {
+			String response = "I am alive?";
+			t.sendResponseHeaders(200, response.length());
+			OutputStream os = t.getResponseBody();
+			os.write(response.getBytes());
+			os.close();
 		}
 	}
 

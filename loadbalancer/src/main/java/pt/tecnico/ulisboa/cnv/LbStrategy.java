@@ -52,19 +52,29 @@ public class LbStrategy extends InstanceManager {
                 }
             }
 
+            // Instance with enough capacity to process the job
             inst = InstanceManager.searchInstanceWithEnoughResources(job);
             if(inst != null)
                 return inst;
 
+            // Instance which will have enough capacity after it completes soon a job
             inst = InstanceManager.searchInstanceWithJobAlmostFinished(job);
             if(inst != null)
                 return inst;
 
-            // No instances available, sleep for 1 second, there is no point in instantly checking for free instances.
+            /**
+             * No instances available, sleep for 1 second, there is no point in instantly checking for free instances.
+             *
+             * The sleep below will block other requests from being processed while this one is not distributed
+             * which should take #waitingRounds seconds.
+             *
+             * It would be more efficient if this behavior didn't happen as very light requests can be slowed down
+             * because of big requests waiting to be distributed.
+             **/
             try {
                 waitingRounds++;
                 Thread.sleep(1000);
-            } catch(InterruptedException e) {}
+            } catch(InterruptedException ignored) {}
         }
     }
 

@@ -72,8 +72,6 @@ import com.amazonaws.services.dynamodbv2.document.*;
 import javax.management.Query;
 import java.util.Iterator;
 
-
-
 public class EC2Launch {
     static AmazonEC2 ec2;
     static AmazonElasticLoadBalancing elb;
@@ -596,7 +594,7 @@ public class EC2Launch {
 
             Table table = dynamoDB.createTable(createTableRequest);
             System.out.println("MSS Created, waiting 10 seconds before inserting data...");
-            Thread.sleep(10000);
+            Thread.sleep(20000);
             insertInitialData();
         } catch (AmazonServiceException ase) {
             System.out.println("Caught an AmazonServiceException, which means your request made it "

@@ -6,26 +6,31 @@ public class AutoScalerThread extends Thread {
     @Override
     public void run() {
         System.out.println("[Auto Scaler] Auto-Scaler thread started.");
+        startupTimestamp = System.currentTimeMillis();
         autoScale();
     }
 
+    static long startupTimestamp = 0;
     static long lastLifeCheckTimestamp = 0;
+    static boolean recentStart = false;
 
     private static void autoScale() {
         while(true) {
             try {
                 Thread.sleep(5000);
-                System.out.println("[Auto Scaler] Auto-scaler woke up.");
+                System.out.println("[Auto Scaler] Auto-scaler woke up, currently there are: " +
+                        InstanceManager.getInstancesSize() + " total instances and " + InstanceManager.getNumberOfInstancesMarkedForTermination() +
+                        " marked for termination.");
 
                 terminateMarkedInstances();
                 doHealthCheck();
                 getExecutedMetrics();
 
+                // Observe the system status to decide what to do
                 AutoScalerAction status = AutoScaler.getSystemStatus();
 
                 if(status.getAction() == AutoScalerActionEnum.NO_ACTION) {
                     System.out.println("[Auto Scaler] No auto scaling action this round.");
-                    continue;
                 } else if(status.getAction() == AutoScalerActionEnum.DECREASE_FLEET) {
                     System.out.println("[Auto Scaler] Decreasing fleet power by terminating " + status.getCount() + " instances.");
                     AutoScaler.markForTermination(status.getCount());
@@ -37,8 +42,7 @@ public class AutoScalerThread extends Thread {
             } catch(InterruptedException e) {
                 System.out.println("[Auto Scaler] Thread interrupted.");
             } catch(Exception e) {
-                System.out.println(e.getMessage());
-                System.out.println("[Auto Scaler] Some exception occurred...");
+                System.out.println("[Auto Scaler] Exception occurred in auto-scaler thread: " + e.getMessage());
             }
         }
     }
@@ -50,11 +54,25 @@ public class AutoScalerThread extends Thread {
         InstanceManager.terminateMarkedInstances();
     }
 
-    //TODO: Send request to web servers to gather information on executed metrics
-    private static void getExecutedMetrics() { }
+    private static void getExecutedMetrics() {
+        // Instructs each instance to query the executed metrics of certain requests that pass a threshold.
+        // Not all requests are queried for their metrics because it would add unnecessary overhead for small
+        // requests if there are many being processed.
+
+        // We must wait some time for the system to stabilize after the start (instances starting, getting ip address, ...)
+        // before querying for the executed metrics.
+        if(!recentStart) {
+            InstanceManager.queryExecutedMetrics();
+        } else {
+            if(System.currentTimeMillis() - startupTimestamp > 30000) {
+                InstanceManager.queryExecutedMetrics();
+                recentStart = false;
+            }
+        }
+    }
 
     private static void doHealthCheck() {
-        // Check the status of the VM's every 1 minute
+        // Check the status of the VM's every 30 seconds
         if(System.currentTimeMillis() - lastLifeCheckTimestamp > 30000) {
             InstanceManager.checkInstancesHealthStatus();
             lastLifeCheckTimestamp = System.currentTimeMillis();

@@ -50,11 +50,13 @@ public class Configs {
     public static String urlBuild(String ip) {
         return "http://" + ip + ":8000/";
     }
-
     public static int PORT = 8000;
     public static int MAX_FAILED_HEALTH_CHECKS = 3;
     public static int MAX_WAITING_ROUNDS = 5;
-    public static long VM_PROCESSING_CAPACITY = 100000000;
     public static long WAIT_TIME_BEFORE_INSTANCE_AVAILABLE = 20000;
+    public static long VM_PROCESSING_CAPACITY = 100000000;  // Total capacity, the value used should be MAX_THRESHOLD_CAPACITY
+    public static double MAX_THRESHOLD_CAPACITY = Configs.VM_PROCESSING_CAPACITY * Configs.ABOVE_PROCESSING_THRESHOLD;
+    public static double LIGHT_REQUEST_THRESHOLD = VM_PROCESSING_CAPACITY * 0.05;
+
 
 }

@@ -1,5 +1,11 @@
 Todo after:
-- Query aos web servers periodica & alterar web server para poder ler essa info (id pedido) e introduzir esse id (adicionado pelo lb) na resposta talvez como header ou simplesmente eliminar? 
+- Query aos web servers periodica:
+    . lb faz query através do endpoint "/metrics" tendo um query parameter "requestId=20" (requestId criado pelo LoadBalancer)
+    . o webserver associa o requestId com a currentThreadId no handler que chama o solve.
+    . criar a estrutura de dados hashMap concurrente?
+    . registrar a associação antes do solve
+    . editar codigo para verificar se algum pedido esta quase a acabar antes de enviar (ou ja existe?)
+    .Job string id field
 
 
 Could get some improvements:
@@ -10,13 +16,16 @@ Could get some improvements:
 - concurrência em geral
 - Entradas repetidas no MSS 
 - o startup do lb cria sempre 2 instâncias, pq n verifica no aws se ja existem
+- é possivel que haja um erro de concorrência no statisticstool getThreadStats quando é chamado o "/metricsExecuted"
+
 
 
 
 
 Report:
-Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
-
+- Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
+- bloqueio de smaller requests no distribute devido ao sleep
+- n vale a pena pedir as metricas de pedidos pequenos é overhead desnecessário
 
 
 Implementação classe LbStrategy (delete instance e distribute) + leitura/escrita MSS com os algoritmos para encontrar o mais semelhante + periodic check nas metricas do web server (piggyback? cada pedido que chega verifica last check)
@@ -26,10 +35,15 @@ Implementação classe LbStrategy (delete instance e distribute) + leitura/escri
 . Os requestArguments (params + viewport) assume que os parametros são corretos e vêm na ordem correta
 
 javac pt/ulisboa/tecnico/cnv/server/WebServer.java
-javac pt/ulisboa/tecnico/cnv/deploy/EC2Launch.java
 
+javac pt/ulisboa/tecnico/cnv/deploy/EC2Launch.java
+java pt.ulisboa.tecnico.cnv.deploy.EC2Launch
 
 Local:
+v5: (portatil)
+export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/vagrant/aws-java-sdk-1.11.1005/lib/aws-java-sdk-1.11.1005.jar:/home/vagrant/aws-java-sdk-1.11.1005/third-party/lib/*"
+
+ou, v4: (desktop)
 export CLASSPATH="/home/vagrant/cnv/CNV:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/server:/home/vagrant/cnv/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/vagrant/aws-java-sdk-1.11.1004/lib/aws-java-sdk-1.11.1004.jar:/home/vagrant/aws-java-sdk-1.11.1004/third-party/lib/*"
 source pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
 java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000
@@ -38,11 +52,13 @@ java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000
 Remote/AWS Instance:
 wget http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip
 unzip aws-java-sdk.zip
-sudo nano /root/.aws/credentials
+sudo mkdir /root/.aws
+sudo touch /root/.aws/credentials
+sudo nano /root/.aws/credentials (colocar as credentials no file)
 
+sudo yum install java-1.7.0-openjdk-devel.x86_64
 sudo yum install git
 git clone https://github.com/BFreitas16/CNV.git
-sudo yum install java-1.7.0-openjdk-devel.x86_64
 
 sudo chmod +x /etc/rc.local
 sudo nano /etc/rc.local 

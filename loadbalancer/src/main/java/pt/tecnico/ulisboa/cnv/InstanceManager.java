@@ -16,8 +16,12 @@ import java.util.List;
  * instances.
  */
 public class InstanceManager {
+    // Instances list is an extremely concurred structure by the auto-scaler
+    // and every new request that comes and need distribution, therefore it needs to
+    // have its access controlled.
     private static List<EC2Instance> instances = new ArrayList<>();
 
+    // Lock used to synchronize access to the instances list.
     static final Object lock = new Object();
 
     /**
@@ -30,12 +34,13 @@ public class InstanceManager {
             for (EC2Instance instance : instances) {
                 String url = Configs.urlBuild(instance.getInstanceIp()) + "health";
                 System.out.println("[Auto Scaler] Sending health check message to: " + url);
-                boolean alive = sendHttpRequest(url);
+                boolean alive = sendHealthCheck(url);
 
                 if (!alive) {
                     instance.incrementFailedHealthChecks();
                     if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
                         System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
+
                         instances.remove(instance);
                     }
                 } else {
@@ -45,7 +50,11 @@ public class InstanceManager {
         }
     }
 
-    private static boolean sendHttpRequest(String url) {
+    /**
+     *  Returns "true" if the instance answered with "alive"
+     *  or "false" if no answer.
+     */
+    private static boolean sendHealthCheck(String url) {
         try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
@@ -76,7 +85,7 @@ public class InstanceManager {
         synchronized (lock) {
             // If there is no instance to answer the request, see if any instance is almost done completing a job
             for (EC2Instance instance : instances) {
-                if (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost < Configs.VM_PROCESSING_CAPACITY)
+                if ( (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost) < Configs.VM_PROCESSING_CAPACITY)
                     return instance;
             }
             return null;
@@ -87,7 +96,7 @@ public class InstanceManager {
         synchronized (lock) {
             for (EC2Instance instance : instances) {
                 if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
-                    System.out.println("[Auto Scaler] Manually terminating instance without jobs and marked for termination.");
+                    System.out.println("[Auto Scaler] Manually terminating instance without jobs that is marked for termination.");
                     instance.terminateInstance();
                     instances.remove(instance);
                 }
@@ -150,7 +159,19 @@ public class InstanceManager {
         }
     }
 
-    protected static AutoScalerAction getInstancesSystemStatus() {
+    public static int getNumberOfInstancesMarkedForTermination() {
+        synchronized (lock) {
+            int count = 0;
+            for (EC2Instance instance : instances) {
+                if(instance.isMarkedForTermination())
+                    count++;
+            }
+
+            return count;
+        }
+    }
+
+    public static AutoScalerAction getInstancesSystemStatus() {
         synchronized (lock) {
             int fleetSize = instances.size();
 
@@ -163,7 +184,7 @@ public class InstanceManager {
             for (EC2Instance instance : instances) {
                 if(instance.aboveProcessingThreshold()) {
                     // Before considering the VM as overwhelmed, check if it has any job that is almost complete
-                    if(instance.checkIfAnyJobIsAlmostDone() < EC2Instance.MAX_THRESHOLD_CAPACITY)
+                    if(instance.checkIfAnyJobIsAlmostDone() < Configs.MAX_THRESHOLD_CAPACITY)
                         instancesAboveThreshold++;
                 } else if(instance.belowProcessingThreshold()) {
                     instancesBelowThreshold++;
@@ -171,6 +192,14 @@ public class InstanceManager {
             }
 
             return AutoScaler.decideAction(fleetSize, instancesAboveThreshold, instancesBelowThreshold);
+        }
+    }
+
+    public static void queryExecutedMetrics() {
+        synchronized (lock) {
+            for (EC2Instance instance : instances) {
+                instance.queryExecutedMetrics();
+            }
         }
     }
 }
