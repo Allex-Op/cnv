@@ -69,6 +69,16 @@ public class EC2Instance {
     }
 
     /**
+     * Code called by the auto-scaler to increase the
+     * fleet of web servers.
+     */
+    public void startInstance() {
+        String[] info = AwsHandler.createEC2Instance();
+        id = info[0];
+        ip = info[1];
+    }
+
+    /**
      *  When a new requests demands the creation of a VM, the VM is not instantly ready and the
      *  client must wait for it to become available or the request will fail.
      */
@@ -85,22 +95,80 @@ public class EC2Instance {
     }
 
     /**
-     * Code called by the auto-scaler to increase the
-     * fleet of web servers.
-     */
-    public void startInstance() {
-        String[] info = AwsHandler.createEC2Instance();
-        id = info[0];
-        ip = info[1];
-    }
-
-    /**
      * Code called by the auto-scaler when it decides
      * to cut the fleet power.
      */
     public synchronized void terminateInstance() {
         AwsHandler.terminateEC2Instance(id);
     }
+
+    /**
+     *  Adds a new job to this specific "web server instance".
+     *  Decision taken by the load balancer.
+     */
+    private synchronized void addJob(Job job) {
+        numberOfRequests.incrementAndGet();
+        currentCapacity.set(currentCapacity.get() + job.expectedCost);
+        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
+        runningJobs.add(job);
+    }
+
+    /**
+     * Load balancer will remove the job after it gets the response
+     * from the web server that is taking care of processing
+     * the request.
+     *
+     */
+    private synchronized void removeJob(Job job) {
+        numberOfRequests.decrementAndGet();
+        runningJobs.remove(job);
+        currentCapacity.set(currentCapacity.get() - job.expectedCost);
+        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
+    }
+
+    /**
+     * Queries the executed metrics of all jobs
+     * that have an higher cost than 5% of the VM capacity.
+     */
+    public void queryExecutedMetrics() {
+        for (Job runningJob : runningJobs) {
+            if(runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
+                String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
+                System.out.println("[EC2 Instance] Sending executed metrics query to: " + url);
+
+                String response = sendExecutedMetricsHttpRequest(url);
+
+                // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
+                // for some reason. (It could be that the thread stats are not existent anymore for this job or
+                // wasn't able to contact the web server)
+                if(response.equals("")) {
+                    continue;
+                } else {
+                    System.out.println("[EC2 Instance] Received current metrics for requestId=" + runningJob.id);
+                    runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
+                }
+            }
+        }
+    }
+
+    private String sendExecutedMetricsHttpRequest(String url) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .build();
+
+            return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+        } catch (Exception e) {
+            System.out.println("[Instance Manager] Failed sending the executed metrics query: " + e.getMessage());
+            return "";
+        }
+    }
+
+
+    /************************************************************/
+    /*                  Capacity Checker Functions              */
+    /************************************************************/
 
     /**
      * Checks if any of the requests dispatched by the load balancer
@@ -119,27 +187,10 @@ public class EC2Instance {
     }
 
     /**
-     * Load balancer will remove the job after it gets the response
-     * from the web server that is taking care of processing
-     * the request.
-     *
+     *   Checks if this instance can process another request (Job).
      */
-    private synchronized void removeJob(Job job) {
-        numberOfRequests.decrementAndGet();
-        runningJobs.remove(job);
-        currentCapacity.set(currentCapacity.get() - job.expectedCost);
-        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
-    }
-
-    /**
-     *  Adds a new job to this specific "web server instance".
-     *  Decision taken by the load balancer.
-     */
-    private synchronized void addJob(Job job) {
-        numberOfRequests.incrementAndGet();
-        currentCapacity.set(currentCapacity.get() + job.expectedCost);
-        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
-        runningJobs.add(job);
+    public boolean hasCapacityToProcess(Job job) {
+        return (currentCapacity.get() + job.expectedCost) < Configs.MAX_THRESHOLD_CAPACITY;
     }
 
     /**
@@ -158,20 +209,26 @@ public class EC2Instance {
         return currentCapacity.get() < (Configs.VM_PROCESSING_CAPACITY * Configs.BELOW_PROCESSING_THRESHOLD);
     }
 
-    /**
-     *  Returns a list of the requests currently
-     *  being processed.
-     */
-    public List<Job> getRunningJobs() {
-        return runningJobs;
+    public long getCurrentCapacity() {
+        return currentCapacity.get();
+    }
+
+
+
+    /************************************************************/
+    /*                      Setters & Getters                   */
+    /************************************************************/
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public String getInstanceId() {
         return id;
     }
 
-    public long getCurrentCapacity() {
-        return currentCapacity.get();
+    public void setIp(String ip) {
+        this.ip = ip;
     }
 
     /**
@@ -197,6 +254,10 @@ public class EC2Instance {
         this.markedForTermination.set(markedForTermination);
     }
 
+    public long getCreationTimestamp() {
+        return creationTimestamp.get();
+    }
+
     public int getNumberOfRequests() {
         return numberOfRequests.get();
     }
@@ -218,51 +279,11 @@ public class EC2Instance {
     }
 
     /**
-     *   Checks if this instance can process another request (Job).
+     *  Returns a list of the requests currently
+     *  being processed.
      */
-    public boolean hasCapacityToProcess(Job job) {
-        return (currentCapacity.get() + job.expectedCost) < Configs.MAX_THRESHOLD_CAPACITY;
+    public List<Job> getRunningJobs() {
+        return runningJobs;
     }
 
-    public long getCreationTimestamp() {
-        return creationTimestamp.get();
-    }
-
-    /**
-     * Queries the executed metrics of all jobs
-     * that have an higher cost than 5% of the VM capacity.
-     */
-    public void queryExecutedMetrics() {
-        for (Job runningJob : runningJobs) {
-            if(runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
-                String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
-                System.out.println("[Instance Manager] Sending executed metrics query to: " + url);
-
-                String response = sendExecutedMetricsHttpRequest(url);
-
-                // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
-                // for some reason. (It could be that the thread stats are not existent anymore for this job or
-                // wasn't able to contact the web server)
-                if(response.equals("")) {
-                    continue;
-                } else {
-                    runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
-                }
-            }
-        }
-    }
-
-    private String sendExecutedMetricsHttpRequest(String url) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .build();
-
-            return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
-        } catch (Exception e) {
-            System.out.println("[Instance Manager] Failed sending the executed metrics query: " + e.getMessage());
-            return "";
-        }
-    }
 }

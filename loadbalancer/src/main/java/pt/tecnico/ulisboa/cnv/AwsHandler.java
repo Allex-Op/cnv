@@ -6,6 +6,12 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatch;
+import com.amazonaws.services.cloudwatch.AmazonCloudWatchClientBuilder;
+import com.amazonaws.services.cloudwatch.model.Datapoint;
+import com.amazonaws.services.cloudwatch.model.Dimension;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsRequest;
+import com.amazonaws.services.cloudwatch.model.GetMetricStatisticsResult;
 import com.amazonaws.services.dynamodbv2.document.*;
 import com.amazonaws.services.dynamodbv2.document.spec.QuerySpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
@@ -18,9 +24,7 @@ import com.amazonaws.services.ec2.model.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import pt.tecnico.ulisboa.cnv.model.DbEntry;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 /**
  * Contains the information to interact
@@ -28,9 +32,9 @@ import java.util.List;
  */
 public class AwsHandler {
     static AWSCredentials credentials = null;
-
     static AmazonEC2 ec2;
     static AmazonDynamoDB dynamoDBClient;
+    static AmazonCloudWatch cloudWatch;
 
     public static void init() {
         System.out.println("[AwsHandler] Initializing credentials...");
@@ -50,6 +54,13 @@ public class AwsHandler {
 
         // DynamoDB client
         dynamoDBClient = AmazonDynamoDBClientBuilder
+                .standard()
+                .withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .withRegion(Configs.REGION_NAME)
+                .build();
+
+        // Cloudwatch client
+        cloudWatch = AmazonCloudWatchClientBuilder
                 .standard()
                 .withCredentials(new AWSStaticCredentialsProvider(credentials))
                 .withRegion(Configs.REGION_NAME)
@@ -107,10 +118,6 @@ public class AwsHandler {
         }
 
         return "";
-    }
-
-    public static void writeToMss() {
-        //TODO: É necessário se quer este método?
     }
 
     /**
@@ -172,5 +179,78 @@ public class AwsHandler {
         }
 
         return new ArrayList<DbEntry>();
+    }
+
+    /**
+     *  Obtains the CPU Usage for all running instances
+     *  calculated by the average on 60 seconds.
+     */
+    public static void getCloudWatchCPUUsage() {
+        long offsetInMilliseconds = 1000 * 60 * 10;
+        Dimension instanceDimension = new Dimension();
+        instanceDimension.setName("InstanceId");
+
+        List<Dimension> dims = new ArrayList<>();
+        dims.add(instanceDimension);
+
+        Set<Instance> instances = getRunningInstances();
+
+        for (Instance instance : instances) {
+            String name = instance.getInstanceId();
+            instanceDimension.setValue(name);
+
+            GetMetricStatisticsRequest request = new GetMetricStatisticsRequest()
+                    .withStartTime(new Date(new Date().getTime() - offsetInMilliseconds))
+                    .withNamespace("AWS/EC2")
+                    .withPeriod(60)
+                    .withMetricName("CPUUtilization")
+                    .withStatistics("Average")
+                    .withDimensions(instanceDimension)
+                    .withEndTime(new Date());
+
+            GetMetricStatisticsResult getMetricStatisticsResult = cloudWatch.getMetricStatistics(request);
+
+            List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
+            for (Datapoint datapoint : datapoints) {
+                System.out.println("[AwsHandler] CPU Utilization Average for instance " + name + " : " + datapoint.getAverage());
+            }
+        }
+    }
+
+    /**
+     *  Get all instances
+     */
+    private static Set<Instance> getInstances() {
+        DescribeInstancesResult describeInstancesResult = ec2.describeInstances();
+        List<Reservation> reservations = describeInstancesResult.getReservations();
+        Set<Instance> instances = new HashSet<Instance>();
+
+        System.out.println("[AwsHandler] Total reservations: " + reservations.size());
+        for (Reservation reservation : reservations) {
+            instances.addAll(reservation.getInstances());
+        }
+
+        System.out.println("[AwsHandler] Total Instances (in all states): " + reservations.size());
+        return instances;
+    }
+
+    /**
+     * Get running instances
+     */
+    public static Set<Instance> getRunningInstances() {
+        Set<Instance> instances = getInstances();
+        Set<Instance> runningInstances = new HashSet<>();
+
+        for (Instance instance : instances) {
+            String name = instance.getInstanceId();
+            String state = instance.getState().getName();
+
+            if(state.equals("running")) {
+                System.out.println("[AwsHandler] Running instance Id: " + name);
+                runningInstances.add(instance);
+            }
+        }
+
+        return runningInstances;
     }
 }

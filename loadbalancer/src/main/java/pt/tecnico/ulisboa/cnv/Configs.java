@@ -21,7 +21,7 @@ public class Configs {
     public static int VIEWPORT_AREA_1024 = 1024*1024;
 
     // AWS pt.tecnico.ulisboa.cnv.Configs - General
-    public static String AMI_ID = "ami-0ad6abad76913ac20";     // EC2 Instance w/ Web Server on Reboot
+    public static String AMI_ID = "ami-072d3617f713251c4";     // EC2 Instance w/ Web Server on Reboot
     public static String INSTANCE_TYPE = "t2.micro";
     public static String ZONE_NAME = "us-east-2a";
     public static String REGION_NAME = "us-east-2";
@@ -38,8 +38,8 @@ public class Configs {
 
 
     // Auto-Scaler configs
-    public static int MINIMUM_CAPACITY = 2;
-    public static int MAXIMUM_CAPACITY = 6;
+    public static int MINIMUM_FLEET_CAPACITY = 2;
+    public static int MAXIMUM_FLEET_CAPACITY = 6;
     public static double BELOW_PROCESSING_THRESHOLD = 0.25;
     public static double ABOVE_PROCESSING_THRESHOLD = 0.85;
 
@@ -50,6 +50,11 @@ public class Configs {
     public static String urlBuild(String ip) {
         return "http://" + ip + ":8000/";
     }
+
+    public static String healthCheckUrlBuild(String ip) {
+        return urlBuild(ip) + "health";
+    }
+
     public static int PORT = 8000;
     public static int MAX_FAILED_HEALTH_CHECKS = 3;
     public static int MAX_WAITING_ROUNDS = 5;
@@ -59,4 +64,9 @@ public class Configs {
     public static double LIGHT_REQUEST_THRESHOLD = VM_PROCESSING_CAPACITY * 0.05;
 
 
+    // Autoscaler timers
+    public static long DESYNCHRONIZED_TEST_TIME = 1000 * 120; // Every 120 seconds
+    public static long HEALTH_CHECK_TIME = 1000 * 30; // Every 30 seconds
+    public static long CPU_USAGE_CHECK_TIME = 1000 * 60; // Every 60 seconds
+    public static long EXECUTED_METRICS_FIRST_TIME_CHECK = 1000 * 30; // Executed 30 seconds after startup
 }

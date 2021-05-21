@@ -36,7 +36,7 @@ public class LbStrategy extends InstanceManager {
                 // But what if we reached max capacity vm's already? We can't allow to keep growing or an attacker
                 // could spawn many vm's uncontrollably...
                 System.out.println("[LbStrategy Part 1] A request that exceeds VM capacity, or that has been waiting for too long appeared...");
-                if (InstanceManager.getInstancesSize() >= Configs.MAXIMUM_CAPACITY) {
+                if (InstanceManager.getInstancesSize() >= Configs.MAXIMUM_FLEET_CAPACITY) {
                     System.out.println("[LbStrategy Part 2] The request can't create a new VM as max fleet size has been achieved, distributing randomly.");
                     // Can't do anything else except pray and spray. An unlucky random VM will be overwhelmed, but
                     // it's better than blocking the whole load balancer.

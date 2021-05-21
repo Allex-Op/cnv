@@ -1,24 +1,22 @@
-Todo after:
-- Query aos web servers periodica:
-    . lb faz query através do endpoint "/metrics" tendo um query parameter "requestId=20" (requestId criado pelo LoadBalancer)
-    . o webserver associa o requestId com a currentThreadId no handler que chama o solve.
-    . criar a estrutura de dados hashMap concurrente?
-    . registrar a associação antes do solve
-    . editar codigo para verificar se algum pedido esta quase a acabar antes de enviar (ou ja existe?)
-    .Job string id field
+Todo:
+- o startup do lb cria sempre 2 instâncias, pq n verifica no aws se ja existem
+- cloudwatch get some random cpu usage stats na autoscaler thread
 
 
 Could get some improvements:
-- findMostSimilar no storageAccess
+- findMostSimilar no storageAccess no range de viewport
 - AutoScaler decideAction
 - correctCost
 - selectInstance because of the multithreading block 
 - concurrência em geral
 - Entradas repetidas no MSS 
-- o startup do lb cria sempre 2 instâncias, pq n verifica no aws se ja existem
-- é possivel que haja um erro de concorrência no statisticstool getThreadStats quando é chamado o "/metricsExecuted"
 
 
+Testar:
+- cpu usage 
+- executedMetrics
+- startup com vm's ja existentes
+- desynchronized instances
 
 
 
@@ -26,6 +24,7 @@ Report:
 - Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
 - bloqueio de smaller requests no distribute devido ao sleep
 - n vale a pena pedir as metricas de pedidos pequenos é overhead desnecessário
+- apenas reutiliza as vms running no aws se o health check suceder.
 
 
 Implementação classe LbStrategy (delete instance e distribute) + leitura/escrita MSS com os algoritmos para encontrar o mais semelhante + periodic check nas metricas do web server (piggyback? cada pedido que chega verifica last check)
@@ -64,7 +63,7 @@ sudo chmod +x /etc/rc.local
 sudo nano /etc/rc.local 
 
 Adicionar ao rc.local:
-export CLASSPATH="/home/ec2-user/CNV:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/server:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/ec2-user/aws-java-sdk-1.11.1013/lib/aws-java-sdk-1.11.1013.jar:/home/vagrant/aws-java-sdk-1.11.1013/third-party/lib/*"
+export CLASSPATH="/home/ec2-user/CNV:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/server:/home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT:/home/ec2-user/aws-java-sdk-1.11.1021/lib/aws-java-sdk-1.11.1021.jar:/home/ec2-user/aws-java-sdk-1.11.1021/third-party/lib/*"
 source /home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
 cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000 >> /home/ec2-user/webServer_logs.txt
 

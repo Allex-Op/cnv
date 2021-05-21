@@ -11,14 +11,14 @@ public class AutoScaler extends InstanceManager {
      */
     public static void increaseFleet(int count) {
         int fleetSize = InstanceManager.getInstancesSize();
-        if(fleetSize >= Configs.MAXIMUM_CAPACITY) {
+        if(fleetSize >= Configs.MAXIMUM_FLEET_CAPACITY) {
             System.out.println("[Auto Scaler] Can't increase fleet power further. Reached max capacity.");
             return;
         }
 
         for (int i = 0; i < count; i++) {
             // Constraint check
-            if(fleetSize < Configs.MAXIMUM_CAPACITY) {
+            if(fleetSize < Configs.MAXIMUM_FLEET_CAPACITY) {
                 System.out.println("[Auto Scaler] Added a new instance to the fleet.");
                 EC2Instance inst = new EC2Instance();
                 inst.startInstance();
@@ -68,12 +68,12 @@ public class AutoScaler extends InstanceManager {
      *  TODO:This code is kinda sketchy, maybe it should be revised in the future....
      */
     public static AutoScalerAction decideAction(int fleetSize, int instancesAboveThreshold, int instancesBelowThreshold) {
-        if(fleetSize == Configs.MINIMUM_CAPACITY) {
+        if(fleetSize == Configs.MINIMUM_FLEET_CAPACITY) {
             if(instancesAboveThreshold > 0) {
                 return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, 1);
             } else
                 return new AutoScalerAction(AutoScalerActionEnum.NO_ACTION);
-        } else if (fleetSize > Configs.MINIMUM_CAPACITY) {
+        } else if (fleetSize > Configs.MINIMUM_FLEET_CAPACITY) {
             if (instancesBelowThreshold > 1) {
                 return new AutoScalerAction(AutoScalerActionEnum.DECREASE_FLEET, instancesBelowThreshold - (instancesBelowThreshold - 1));
             } else if (instancesAboveThreshold == fleetSize) {
