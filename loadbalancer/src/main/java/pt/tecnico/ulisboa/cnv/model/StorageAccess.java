@@ -101,9 +101,11 @@ public class StorageAccess {
     private static void updateEntries(RequestArguments args) {
         long currentTime = System.currentTimeMillis();
         if(currentTime - lastUpdateTimestamp > EXPIRATION_TIME) {
+            System.out.println();
             gridScanEntries = AwsHandler.readFromMss(Configs.GRID_SCAN);
             progressiveScanEntries = AwsHandler.readFromMss(Configs.PROGRESSIVE_SCAN);
             greedyScanEntries = AwsHandler.readFromMss(Configs.GREEDY_RANGE_SCAN);
+            System.out.println();
 
             lastUpdateTimestamp = System.currentTimeMillis();
         }

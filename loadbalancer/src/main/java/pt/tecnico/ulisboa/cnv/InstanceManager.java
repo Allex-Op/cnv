@@ -1,18 +1,8 @@
 package pt.tecnico.ulisboa.cnv;
 
 import com.amazonaws.services.ec2.model.Instance;
-import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScaler;
-import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScalerAction;
-import pt.tecnico.ulisboa.cnv.AutoScaler.AutoScalerActionEnum;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Class deals with the concurrent management of the
@@ -25,152 +15,92 @@ public class InstanceManager {
     private static List<EC2Instance> instances = new ArrayList<>();
 
     // Lock used to synchronize access to the instances list.
-    static final Object lock = new Object();
+    public static final Object instancesLock = new Object();
 
-    /**
-     * It checks if all the instances registered
-     * are still alive. In case they are down the
-     * specified object should be deleted.
-     */
-    public static void checkInstancesHealthStatus() {
-        synchronized (lock) {
+    public static List<EC2Instance> getInstances() {
+        return instances;
+    }
+
+    public static int getInstancesSize() {
+        synchronized (instancesLock) {
+            return instances.size();
+        }
+    }
+
+    public static void addInstance(EC2Instance instance) {
+        synchronized (instancesLock) {
+            instances.add(instance);
+        }
+    }
+
+    public static void removeInstance(EC2Instance instance) {
+        synchronized (instancesLock) {
+            instances.remove(instance);
+        }
+    }
+
+    public static EC2Instance getInstance(int idx) {
+        synchronized (instancesLock) {
+            return instances.get(idx);
+        }
+    }
+
+    public static EC2Instance searchInstanceWithoutJobs() {
+        synchronized (instancesLock) {
             for (EC2Instance instance : instances) {
-                String url = Configs.healthCheckUrlBuild(instance.getInstanceIp());
-
-                System.out.println("[Auto Scaler] Sending health check message to: " + url);
-                boolean alive = sendHealthCheck(url);
-
-                if (!alive) {
-                    instance.incrementFailedHealthChecks();
-                    if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
-                        System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
-
-                        instances.remove(instance);
-                    }
-                } else {
-                    instance.setFailedHealthChecks(0);
-                }
+                if(instance.getNumberOfRequests() == 0)
+                    return instance;
             }
+            return null;
         }
     }
 
     /**
-     *  Returns "true" if the instance answered with "alive"
-     *  or "false" if no answer.
+     *  Searches for an instance that has enought capacity process a @Job
      */
-    private static boolean sendHealthCheck(String url) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .build();
-
-            String response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
-            return response.contains("alive");
-        } catch (Exception e) {
-            System.out.println("[Auto Scaler] Failed sending HTTP request (healthcheck). Instance unavailable.");
-            return false;
-        }
-    }
-
     public static EC2Instance searchInstanceWithEnoughResources(Job job) {
-        synchronized (lock) {
+        synchronized (instancesLock) {
             // First search for an instance that has resources to answer the request
             for (EC2Instance instance : instances) {
                 if(instance.isMarkedForTermination())
                     continue;
 
                 // If instance not above processing threshold
-                if (instance.hasCapacityToProcess(job))
+                if (instance.hasCapacityToProcess(job)) {
+                    System.out.println("[Instance Manager] Found an instance with enough resources to process Job: " + job.id);
                     return instance;
+                }
             }
             return null;
         }
     }
 
+    /**
+     *  Searches for an instance that is soon going to have enough resources
+     *  to process a @Job
+     */
     public static EC2Instance searchInstanceWithJobAlmostFinished(Job job) {
-        synchronized (lock) {
+        synchronized (instancesLock) {
             // If there is no instance to answer the request, see if any instance is almost done completing a job
             for (EC2Instance instance : instances) {
                 if(instance.isMarkedForTermination())
                     continue;
 
-                if ( (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost) < Configs.VM_PROCESSING_CAPACITY)
+                if ( (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost) < Configs.VM_PROCESSING_CAPACITY) {
+                    System.out.println("[Instance Manager] Found instance: " + instance.getInstanceId() +", that will soon have enough resources to process job: " + job.id);
                     return instance;
+                }
             }
             return null;
         }
     }
 
-    public static void terminateMarkedInstances() {
-        synchronized (lock) {
-            for (EC2Instance instance : instances) {
-                if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
-                    System.out.println("[Auto Scaler] Manually terminating instance without jobs that is marked for termination.");
-                    instance.terminateInstance();
-                    instances.remove(instance);
-                }
-            }
-        }
-    }
-
-    public static void markForTermination(int marks) {
-        synchronized (lock) {
-            int currMarked = 0;
-            int fleetSize = instances.size();
-
-            for (EC2Instance instance : instances) {
-                if(instance.belowProcessingThreshold()) {
-
-                    // Constraint check
-                    if(fleetSize <= Configs.MINIMUM_FLEET_CAPACITY) {
-                        System.out.println("[Auto Scaler] Can't mark anymore instances for termination, as it would bring the number below the minimum configured.");
-                        return;
-                    }
-
-                    // Only mark for termination if its not terminating already
-                    if(!instance.isMarkedForTermination()) {
-                        instance.setMarkedForTermination(true);
-                        currMarked++;
-                        fleetSize--;
-                        System.out.println("[Auto Scaler] Instance marked for termination.");
-                    }
-
-                    // It will mark X number of vm's for termination, this to avoid
-                    // terminating all vm's in case all are below the defined threshold
-                    if(currMarked == marks)
-                        return;
-                }
-            }
-        }
-    }
-
-    public static int getInstancesSize() {
-        synchronized (lock) {
-            return instances.size();
-        }
-    }
-
-    public static void addInstance(EC2Instance instance) {
-        synchronized (lock) {
-            instances.add(instance);
-        }
-    }
-
-    public static void removeInstance(EC2Instance instance) {
-        synchronized (lock) {
-            instances.remove(instance);
-        }
-    }
-
-    public static EC2Instance getInstance(int idx) {
-        synchronized (lock) {
-            return instances.get(idx);
-        }
-    }
-
+    /**
+     *  Used by the Auto-Scaler to find the number
+     *  of instances that are going to terminate.
+     */
     public static int getNumberOfInstancesMarkedForTermination() {
-        synchronized (lock) {
+        synchronized (instancesLock) {
             int count = 0;
             for (EC2Instance instance : instances) {
                 if(instance.isMarkedForTermination())
@@ -181,66 +111,14 @@ public class InstanceManager {
         }
     }
 
-    public static AutoScalerAction getInstancesSystemStatus() {
-        synchronized (lock) {
-            int fleetSize = instances.size();
-
-            if(fleetSize < Configs.MINIMUM_FLEET_CAPACITY)
-                return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, Configs.MINIMUM_FLEET_CAPACITY - fleetSize);
-
-            int instancesAboveThreshold = 0;
-            int instancesBelowThreshold = 0;
-
-            for (EC2Instance instance : instances) {
-                if(instance.aboveProcessingThreshold()) {
-                    // Before considering the VM as overwhelmed, check if it has any job that is almost complete
-                    if(instance.checkIfAnyJobIsAlmostDone() < Configs.MAX_THRESHOLD_CAPACITY)
-                        instancesAboveThreshold++;
-                } else if(instance.belowProcessingThreshold()) {
-                    instancesBelowThreshold++;
-                }
-            }
-
-            return AutoScaler.decideAction(fleetSize, instancesAboveThreshold, instancesBelowThreshold);
-        }
-    }
-
-    public static void queryExecutedMetrics() {
-        synchronized (lock) {
-            for (EC2Instance instance : instances) {
-                instance.queryExecutedMetrics();
-            }
-        }
-    }
-
-    /**
-     *  Finds from the running list of instances which currently
-     *  exist in the context of the load balancer process (only known by AWS), if it doesn't
-     *  exist is considered a de-synchronized instance.
-     */
-    public static Set<Instance> findDesynchronizedInstances(Set<Instance> runningInstances) {
-        synchronized (lock) {
-            Set<Instance> desynchronizedInstances = new HashSet<>();
-
-            for (Instance instance : runningInstances) {
-                // If the running instance doesn't exist then its considered de-synced
-                if(!doesInstanceExist(instance)) {
-                    desynchronizedInstances.add(instance);
-                }
-            }
-
-            return desynchronizedInstances;
-        }
-    }
-
     /**
      *  Checks if this AWS instance exists in the LB
      *  process context. Only to be used by the above function.
      */
-    private static boolean doesInstanceExist(Instance instance) {
+    public static boolean doesInstanceExist(Instance instance) {
         // Java synchronized blocks are reentrant, a deadlock won't
         // happen if a thread that owns this lock tries to enter here again.
-        synchronized (lock) {
+        synchronized (instancesLock) {
             String instanceId = instance.getInstanceId();
 
             for (EC2Instance ec2Instance : instances) {
@@ -249,6 +127,22 @@ public class InstanceManager {
             }
 
             return false;
+        }
+    }
+
+    /**
+     *  Returns the instance with lowest capacity, used in the unfortunate case
+     *  of not being able to create more VM's.
+     */
+    protected static EC2Instance getInstanceWithLowestCapacity() {
+        synchronized (instancesLock) {
+            EC2Instance lowest = instances.get(0);
+            for (EC2Instance instance : instances) {
+                if(instance.getCurrentCapacity() < lowest.getCurrentCapacity())
+                    lowest = instance;
+            }
+
+            return lowest;
         }
     }
 }

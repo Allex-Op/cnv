@@ -9,7 +9,7 @@ import java.util.concurrent.Executors;
 public class LoadBalancerApplication {
     public static void main(String[] args) {
         String SERVER = "0.0.0.0";
-        int PORT = 80;
+        int PORT = 8080;
 
         // In case there are other non default parameters
         if(args.length == 2) {
@@ -32,8 +32,8 @@ public class LoadBalancerApplication {
 
             System.out.println(server.getAddress().toString());
         } catch(Exception e) {
-            System.out.println(e.getMessage());
-            System.out.println("Server error");
+            System.out.println("Server error: " + e.getMessage());
+            System.out.println(e.fillInStackTrace());
         }
     }
 }

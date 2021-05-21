@@ -31,7 +31,10 @@ public class EC2Instance {
     private AtomicInteger failedHealthChecks = new AtomicInteger(0);
 
     private AtomicLong currentCapacity = new AtomicLong(0);
-    private List<Job> runningJobs = Collections.synchronizedList(new ArrayList<>());
+
+    private List<Job> runningJobs = new ArrayList<>();
+
+    private final Object jobsLock = new Object();
 
     private AtomicLong creationTimestamp = new AtomicLong(0);
 
@@ -42,12 +45,8 @@ public class EC2Instance {
     /**
      *  It sends the request to this web server and await
      *  for its response.
-     *
-     *  TODO: There may be a timeout error on requests that take a long time
      */
     public byte[] executeRequest(Job job, String query) {
-        addJob(job);
-
         isInstanceFresh();
 
         try {
@@ -60,11 +59,10 @@ public class EC2Instance {
                     .build();
 
             byte[] result = client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
-            removeJob(job);
             return result;
         } catch (Exception e) {
             System.out.println("[EC2 Instance] Failed obtaining result of request.");
-            return new byte[] {};
+            return "WebServer failed to process the request :(".getBytes();
         }
     }
 
@@ -106,11 +104,13 @@ public class EC2Instance {
      *  Adds a new job to this specific "web server instance".
      *  Decision taken by the load balancer.
      */
-    private synchronized void addJob(Job job) {
-        numberOfRequests.incrementAndGet();
-        currentCapacity.set(currentCapacity.get() + job.expectedCost);
-        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
-        runningJobs.add(job);
+    public void addJob(Job job) {
+        synchronized (jobsLock) {
+            numberOfRequests.incrementAndGet();
+            currentCapacity.set(currentCapacity.get() + job.expectedCost);
+            System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
+            runningJobs.add(job);
+        }
     }
 
     /**
@@ -119,11 +119,13 @@ public class EC2Instance {
      * the request.
      *
      */
-    private synchronized void removeJob(Job job) {
-        numberOfRequests.decrementAndGet();
-        runningJobs.remove(job);
-        currentCapacity.set(currentCapacity.get() - job.expectedCost);
-        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
+    public void removeJob(Job job) {
+        synchronized (jobsLock) {
+            numberOfRequests.decrementAndGet();
+            runningJobs.remove(job);
+            currentCapacity.set(currentCapacity.get() - job.expectedCost);
+            System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
+        }
     }
 
     /**
@@ -131,21 +133,23 @@ public class EC2Instance {
      * that have an higher cost than 5% of the VM capacity.
      */
     public void queryExecutedMetrics() {
-        for (Job runningJob : runningJobs) {
-            if(runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
-                String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
-                System.out.println("[EC2 Instance] Sending executed metrics query to: " + url);
+        synchronized (jobsLock) {
+            for (Job runningJob : runningJobs) {
+                if (runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
+                    String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
+                    System.out.println("[EC2 Instance] Sending executed metrics query to: " + url);
 
-                String response = sendExecutedMetricsHttpRequest(url);
+                    String response = sendExecutedMetricsHttpRequest(url);
 
-                // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
-                // for some reason. (It could be that the thread stats are not existent anymore for this job or
-                // wasn't able to contact the web server)
-                if(response.equals("")) {
-                    continue;
-                } else {
-                    System.out.println("[EC2 Instance] Received current metrics for requestId=" + runningJob.id);
-                    runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
+                    // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
+                    // for some reason. (It could be that the thread stats are not existent anymore for this job or
+                    // wasn't able to contact the web server)
+                    if (response.equals("")) {
+                        continue;
+                    } else {
+                        System.out.println("[EC2 Instance] Received current metrics for requestId=" + runningJob.id);
+                        runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
+                    }
                 }
             }
         }
@@ -178,12 +182,14 @@ public class EC2Instance {
      * are about to complete, complete.
      */
     public synchronized long checkIfAnyJobIsAlmostDone() {
-        long newCapacityAfterFreedJobs = currentCapacity.get();
-        for (Job runningJob : runningJobs) {
-            if(runningJob.isJobAlmostDone())
-                newCapacityAfterFreedJobs -= runningJob.expectedCost;
+        synchronized (jobsLock) {
+            long newCapacityAfterFreedJobs = currentCapacity.get();
+            for (Job runningJob : runningJobs) {
+                if (runningJob.isJobAlmostDone())
+                    newCapacityAfterFreedJobs -= runningJob.expectedCost;
+            }
+            return newCapacityAfterFreedJobs;
         }
-        return newCapacityAfterFreedJobs;
     }
 
     /**
@@ -216,7 +222,7 @@ public class EC2Instance {
 
 
     /************************************************************/
-    /*                      Setters & Getters                   */
+    /*                      Getters & Setters                   */
     /************************************************************/
 
     public void setId(String id) {
@@ -277,13 +283,4 @@ public class EC2Instance {
     public void incrementFailedHealthChecks() {
         failedHealthChecks.incrementAndGet();
     }
-
-    /**
-     *  Returns a list of the requests currently
-     *  being processed.
-     */
-    public List<Job> getRunningJobs() {
-        return runningJobs;
-    }
-
 }

@@ -7,10 +7,13 @@ public class LbStrategy extends InstanceManager {
      *  algorithms.
      */
     public static byte[] distributeRequest(Job job, String query) {
-        System.out.println("[Lb Strategy] Distributing a new request: " + query);
         EC2Instance ec2 = selectInstance(job);
-        System.out.println("[Lb Strategy] Found an available instance to process the request: " + query);
-        return ec2.executeRequest(job, query);
+        System.out.println("[Lb Strategy] Found an available instance to process the request: " + job.id);
+
+        byte[] result = ec2.executeRequest(job, query);
+        ec2.removeJob(job);
+
+        return result;
     }
 
     /**
@@ -23,60 +26,70 @@ public class LbStrategy extends InstanceManager {
      * As this method is synchronized, we guarantee that no new request
      * will steal the spot of the awaiting request. This can also backfire
      * as the request waiting can be way bigger than the new request, and
-     * delay smaller and fast requests, but alas, it is what it is.
+     * delay smaller and fast requests.
      *
+     * It would be more efficient if this behavior didn't happen as very light requests can be slowed down
+     * because of big requests waiting to be distributed.
+     *
+     * THe job cost is added here synchronously
      */
     private synchronized static EC2Instance selectInstance(Job job) {
         int waitingRounds = 0;
         EC2Instance inst = null;
         while(true) {
-            // Some requests will exceed anyway the capacity of a VM, this request will be
-            // looped forever and stop everything else if its not handled.
-            if(waitingRounds == Configs.MAX_WAITING_ROUNDS || job.expectedCost > Configs.VM_PROCESSING_CAPACITY) {
-                // But what if we reached max capacity vm's already? We can't allow to keep growing or an attacker
-                // could spawn many vm's uncontrollably...
-                System.out.println("[LbStrategy Part 1] A request that exceeds VM capacity, or that has been waiting for too long appeared...");
-                if (InstanceManager.getInstancesSize() >= Configs.MAXIMUM_FLEET_CAPACITY) {
-                    System.out.println("[LbStrategy Part 2] The request can't create a new VM as max fleet size has been achieved, distributing randomly.");
-                    // Can't do anything else except pray and spray. An unlucky random VM will be overwhelmed, but
-                    // it's better than blocking the whole load balancer.
-
-                    return InstanceManager.getInstance(0);
-                } else {
-                    System.out.println("[LbStrategy Part 2] The request will create a new VM as the current fleet size is smaller than the maximum configured.");
-
-                    inst = new EC2Instance();
-                    inst.startInstance();
-                    InstanceManager.addInstance(inst);
-                    return inst;
-                }
-            }
+            // If the request waited nº waitingRounds or is bigger than a VM capacity
+           inst = longWaitingRequest(job, waitingRounds);
+            if(inst != null)
+                break;
 
             // Instance with enough capacity to process the job
             inst = InstanceManager.searchInstanceWithEnoughResources(job);
             if(inst != null)
-                return inst;
+                break;
 
             // Instance which will have enough capacity after it completes soon a job
             inst = InstanceManager.searchInstanceWithJobAlmostFinished(job);
             if(inst != null)
-                return inst;
+                break;
 
-            /**
-             * No instances available, sleep for 1 second, there is no point in instantly checking for free instances.
-             *
-             * The sleep below will block other requests from being processed while this one is not distributed
-             * which should take #waitingRounds seconds.
-             *
-             * It would be more efficient if this behavior didn't happen as very light requests can be slowed down
-             * because of big requests waiting to be distributed.
-             **/
             try {
                 waitingRounds++;
                 Thread.sleep(1000);
             } catch(InterruptedException ignored) {}
         }
+
+        inst.addJob(job);
+        return inst;
     }
 
 
+    /**
+     *  Some requests will exceed the capacity of a VM, those requests will be
+     *  looped forever and stop everything else if its not handled.
+     */
+    private static EC2Instance longWaitingRequest(Job job, int waitingRounds) {
+        EC2Instance inst = null;
+
+        if(waitingRounds == Configs.MAX_WAITING_ROUNDS || job.expectedCost > Configs.VM_PROCESSING_CAPACITY) {
+            System.out.println("[Lb Strategy] Request with id: " + job.id + " exceeds VM capacity or has been waiting for too long.");
+            if (InstanceManager.getInstancesSize() >= Configs.MAXIMUM_FLEET_CAPACITY) {
+                // Send request to the VM with lowest current capacity
+                inst = InstanceManager.getInstanceWithLowestCapacity();
+                return inst;
+            } else {
+                // If there is a vm without jobs use that one first
+                inst = InstanceManager.searchInstanceWithoutJobs();
+                if(inst != null)
+                    return inst;
+
+                // if there is no free vm create a new one for the big request
+                System.out.println("[Lb Strategy] Creating new VM to process request id: " + job.id);
+                inst = new EC2Instance();
+                inst.startInstance();
+                InstanceManager.addInstance(inst);
+            }
+        }
+
+        return inst;
+    }
 }

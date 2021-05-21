@@ -9,6 +9,8 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 
@@ -34,43 +36,68 @@ public class AutoScalerThread extends Thread {
     private static void autoScale() {
         while(true) {
             try {
+                System.out.println();
                 Thread.sleep(5000);
+                System.out.println();
                 System.out.println("[Auto Scaler] Auto-scaler woke up, currently there are: " +
                         InstanceManager.getInstancesSize() + " total instances and " + InstanceManager.getNumberOfInstancesMarkedForTermination() +
                         " marked for termination.");
 
-                synchronizeAwsInstances();
-                terminateMarkedInstances();
-                doHealthCheck();
-                getExecutedMetrics();
-                getCPUUsage();
-
-                // Observe the system status to decide what to do
-                AutoScalerAction status = AutoScaler.getSystemStatus();
-
-                if(status.getAction() == AutoScalerActionEnum.NO_ACTION) {
-                    System.out.println("[Auto Scaler] No auto scaling action this round.");
-                } else if(status.getAction() == AutoScalerActionEnum.DECREASE_FLEET) {
-                    System.out.println("[Auto Scaler] Decreasing fleet power by terminating " + status.getCount() + " instances.");
-                    AutoScaler.markForTermination(status.getCount());
-                } else  if(status.getAction() == AutoScalerActionEnum.INCREASE_FLEET) {
-                    System.out.println("[Auto Scaler] Increasing fleet power with " + status.getCount() + " new instances.");
-                    AutoScaler.increaseFleet(status.getCount());
+                // Obtaining the lock once instead individually for each operation
+                // as it can slow down the auto-scaler thread too much...
+                synchronized (InstanceManager.instancesLock) {
+                    synchronizeAwsInstances();
+                    terminateMarkedInstances();
+                    doHealthCheck();
+                    getExecutedMetrics();
+                    getCPUUsage();
+                    observeStatusAndAct();
                 }
-
             } catch(InterruptedException e) {
                 System.out.println("[Auto Scaler] Thread interrupted.");
             } catch(Exception e) {
                 System.out.println("[Auto Scaler] Exception occurred in auto-scaler thread: " + e.getMessage());
+                throw e;
             }
         }
     }
 
+    /**
+     * It will first observe the status of the system (instances overwhelmed, free..)
+     * and then do one of the 3 possible actions: INCREASE_FLEET, DECREASE_FLEET or NO_ACTION.
+     */
+    private static void observeStatusAndAct() {
+        // Observe the system status to decide what to do
+        AutoScalerAction status = AutoScaler.getSystemStatus();
+
+        if (status.getAction() == AutoScalerActionEnum.NO_ACTION) {
+            System.out.println("[Auto Scaler] No auto scaling action this round.");
+        } else if (status.getAction() == AutoScalerActionEnum.DECREASE_FLEET) {
+            System.out.println("[Auto Scaler] Decreasing fleet power by terminating " + status.getCount() + " instances.");
+            AutoScaler.markForTermination(status.getCount());
+        } else if (status.getAction() == AutoScalerActionEnum.INCREASE_FLEET) {
+            System.out.println("[Auto Scaler] Increasing fleet power with " + status.getCount() + " new instances.");
+            AutoScaler.increaseFleet(status.getCount());
+        }
+    }
+
+    /**
+     * It terminates instances that are marked for termination
+     * and have no job.
+     */
     private static void terminateMarkedInstances() {
         // Check if there are any instances marked for termination without jobs, if so terminate them
         // this can happen in some buggy scenarios where instances start, they have no jobs and are marked
         // for termination. Never actually terminating.
-        InstanceManager.terminateMarkedInstances();
+        List<EC2Instance> instances = InstanceManager.getInstances();
+
+        for (EC2Instance instance : instances) {
+            if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
+                System.out.println("[Auto Scaler] Manually terminating instance without jobs that is marked for termination.");
+                instance.terminateInstance();
+                instances.remove(instance);
+            }
+        }
     }
 
     /**
@@ -88,10 +115,13 @@ public class AutoScalerThread extends Thread {
         // The first request should be 30 seconds after startup, but after that it should be every
         // time the auto-scaler thread wakes up.
         if(!recentStartExecutedMetrics) {
-            InstanceManager.queryExecutedMetrics();
+            for (EC2Instance instance : InstanceManager.getInstances())
+                instance.queryExecutedMetrics();
         } else {
             if(System.currentTimeMillis() - startupTimestamp > Configs.EXECUTED_METRICS_FIRST_TIME_CHECK) {
-                InstanceManager.queryExecutedMetrics();
+                for (EC2Instance instance : InstanceManager.getInstances())
+                    instance.queryExecutedMetrics();
+
                 recentStartExecutedMetrics = false;
             }
         }
@@ -103,20 +133,64 @@ public class AutoScalerThread extends Thread {
     private static void getCPUUsage() {
         long currTime = System.currentTimeMillis();
 
-        if((currTime - cpuUsageTimestamp) > Configs.CPU_USAGE_CHECK_TIME)
-            AwsHandler.getCloudWatchCPUUsage();
+        if((currTime - cpuUsageTimestamp) > Configs.CPU_USAGE_CHECK_TIME) {
+            AwsHandler.getCloudWatchCPUUsage(InstanceManager.getInstances());
+            cpuUsageTimestamp = currTime;
+        }
     }
 
     /**
-     * Sends health check request every 30 seconds
+     * It checks if all the instances registered
+     * are still alive. In case they are down the
+     * specified object should be deleted.
      */
     private static void doHealthCheck() {
         // Check the status of the VM's every 30 seconds
-        if(System.currentTimeMillis() - lastLifeCheckTimestamp > Configs.HEALTH_CHECK_TIME) {
-            InstanceManager.checkInstancesHealthStatus();
+        if (System.currentTimeMillis() - lastLifeCheckTimestamp > Configs.HEALTH_CHECK_TIME) {
+            List<EC2Instance> instances = InstanceManager.getInstances();
+
+            for (EC2Instance instance : instances) {
+                String url = Configs.healthCheckUrlBuild(instance.getInstanceIp());
+
+                System.out.println("[Auto Scaler] Sending health check message to: " + url);
+                boolean alive = sendHealthCheck(url);
+
+                if (!alive) {
+                    instance.incrementFailedHealthChecks();
+                    if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
+                        System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
+
+                        instances.remove(instance);
+                    }
+                } else {
+                    instance.setFailedHealthChecks(0);
+                }
+            }
+
+
             lastLifeCheckTimestamp = System.currentTimeMillis();
         }
     }
+
+    /**
+     *  Returns "true" if the instance answered with "alive"
+     *  or "false" if no answer.
+     */
+    private static boolean sendHealthCheck(String url) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .build();
+
+            String response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+            return response.contains("alive");
+        } catch (Exception e) {
+            System.out.println("[Auto Scaler] Failed sending HTTP request (healthcheck). Instance unavailable.");
+            return false;
+        }
+    }
+
 
     /**
      * Because of unfortunate bugs or sudden terminations
@@ -136,7 +210,7 @@ public class AutoScalerThread extends Thread {
             desynchronizedInstancesTimestamp = currTime;
 
             Set<Instance> instances = AwsHandler.getRunningInstances();
-            Set<Instance> desynchronizedInstances = InstanceManager.findDesynchronizedInstances(instances);
+            Set<Instance> desynchronizedInstances = findDesynchronizedInstances(instances);
 
             for (Instance instance : desynchronizedInstances) {
                 String ip = instance.getPublicIpAddress();
@@ -163,6 +237,24 @@ public class AutoScalerThread extends Thread {
 
             }
         }
+    }
+
+    /**
+     *  Finds from the running list of instances which currently
+     *  exist in the context of the load balancer process (only known by AWS), if it doesn't
+     *  exist is considered a de-synchronized instance.
+     */
+    private static Set<Instance> findDesynchronizedInstances(Set<Instance> runningInstances) {
+        Set<Instance> desynchronizedInstances = new HashSet<>();
+
+        for (Instance instance : runningInstances) {
+            // If the running instance doesn't exist then its considered de-synced
+            if(!InstanceManager.doesInstanceExist(instance)) {
+                desynchronizedInstances.add(instance);
+            }
+        }
+
+        return desynchronizedInstances;
     }
 
     private static boolean sendHealthCheckToDesyncInstance(String ip) {

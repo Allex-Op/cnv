@@ -185,7 +185,7 @@ public class AwsHandler {
      *  Obtains the CPU Usage for all running instances
      *  calculated by the average on 60 seconds.
      */
-    public static void getCloudWatchCPUUsage() {
+    public static void getCloudWatchCPUUsage(List<EC2Instance> instances) {
         long offsetInMilliseconds = 1000 * 60 * 10;
         Dimension instanceDimension = new Dimension();
         instanceDimension.setName("InstanceId");
@@ -193,9 +193,7 @@ public class AwsHandler {
         List<Dimension> dims = new ArrayList<>();
         dims.add(instanceDimension);
 
-        Set<Instance> instances = getRunningInstances();
-
-        for (Instance instance : instances) {
+        for (EC2Instance instance : instances) {
             String name = instance.getInstanceId();
             instanceDimension.setValue(name);
 
@@ -225,12 +223,10 @@ public class AwsHandler {
         List<Reservation> reservations = describeInstancesResult.getReservations();
         Set<Instance> instances = new HashSet<Instance>();
 
-        System.out.println("[AwsHandler] Total reservations: " + reservations.size());
         for (Reservation reservation : reservations) {
             instances.addAll(reservation.getInstances());
         }
 
-        System.out.println("[AwsHandler] Total Instances (in all states): " + reservations.size());
         return instances;
     }
 
@@ -242,11 +238,9 @@ public class AwsHandler {
         Set<Instance> runningInstances = new HashSet<>();
 
         for (Instance instance : instances) {
-            String name = instance.getInstanceId();
             String state = instance.getState().getName();
 
             if(state.equals("running")) {
-                System.out.println("[AwsHandler] Running instance Id: " + name);
                 runningInstances.add(instance);
             }
         }

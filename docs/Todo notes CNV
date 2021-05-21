@@ -19,6 +19,20 @@ Testar:
 - desynchronized instances
 
 
+weird behavior:
+- algoritmo de decisão do auto-scaler esta a criar instâncias quando n deve:
+    - o algoritmo ta demasiado sensivel mal passe 1 vez do threshold cria outra VM, mas n devia, devia ver se a outras livres
+    e apenas ai criar. CHECKAR o getsystemstatus e do action
+
+
+- Existe possibilidade de dead lock entre 2 thread que estejam a espera do lock da instance e do lock das runningjobs,
+tenho que garantir que o jobsLock so é usado em operações simples que n chamem outras que tenham locks
+
+
+
+A aulo-scaler thread devia ter mais prioridade sobre o obtaining das instances "lock" pequenos requests podem atrasar
+o auto-scaling, logo apanha o lock ao inicio. Mover as funções de volta para o seu lugar do instanceManager
+
 
 Report:
 - Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
@@ -68,6 +82,18 @@ source /home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
 cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000 >> /home/ec2-user/webServer_logs.txt
 
 
+Testar load balancer requests: (Meter port 80 dps)
+leve:
+http://127.0.0.1:8080/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
+
+pesado:
+http://127.0.0.1:8080/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png
+
+
+
+
+
+
 
 
 ab -n 1 -c 1 -s 500 "http://3.21.105.6:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
@@ -76,11 +102,11 @@ http://cnv-lb-2108617815.us-east-2.elb.amazonaws.com/scan?w=2048&h=2048&x0=512&x
 
 
 
+
 Database mock data:
 GRID_SCAN:
 viewport 64:
-ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/
-scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
+ab -n 1 -c 1 -s 500 "http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"
 
 
 Number of basic blocks: 2097721
