@@ -5,10 +5,12 @@ import pt.tecnico.ulisboa.cnv.Configs;
 import pt.tecnico.ulisboa.cnv.EC2Instance;
 import pt.tecnico.ulisboa.cnv.InstanceManager;
 
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +31,7 @@ public class AutoScalerThread extends Thread {
     static long lastLifeCheckTimestamp = 0;
     static long cpuUsageTimestamp = 0;
     static long desynchronizedInstancesTimestamp = 0;
+    static long currentToleranceOnExceededThreshold = 0;
 
     static boolean recentStartExecutedMetrics = false;
     static boolean firstDesynchronizedTest = true;
@@ -89,7 +92,7 @@ public class AutoScalerThread extends Thread {
         // Check if there are any instances marked for termination without jobs, if so terminate them
         // this can happen in some buggy scenarios where instances start, they have no jobs and are marked
         // for termination. Never actually terminating.
-        List<EC2Instance> instances = InstanceManager.getInstances();
+        List<EC2Instance> instances = InstanceManager.instances;
 
         for (EC2Instance instance : instances) {
             if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
@@ -115,11 +118,11 @@ public class AutoScalerThread extends Thread {
         // The first request should be 30 seconds after startup, but after that it should be every
         // time the auto-scaler thread wakes up.
         if(!recentStartExecutedMetrics) {
-            for (EC2Instance instance : InstanceManager.getInstances())
+            for (EC2Instance instance : InstanceManager.instances)
                 instance.queryExecutedMetrics();
         } else {
             if(System.currentTimeMillis() - startupTimestamp > Configs.EXECUTED_METRICS_FIRST_TIME_CHECK) {
-                for (EC2Instance instance : InstanceManager.getInstances())
+                for (EC2Instance instance : InstanceManager.instances)
                     instance.queryExecutedMetrics();
 
                 recentStartExecutedMetrics = false;
@@ -128,13 +131,42 @@ public class AutoScalerThread extends Thread {
     }
 
     /**
-     * Gets average CPU usage of EC2 Instance every 60 seconds
+     * Gets average CPU usage of EC2 Instance every 180 seconds
      */
     private static void getCPUUsage() {
         long currTime = System.currentTimeMillis();
 
         if((currTime - cpuUsageTimestamp) > Configs.CPU_USAGE_CHECK_TIME) {
-            AwsHandler.getCloudWatchCPUUsage(InstanceManager.getInstances());
+            List<String> instancesAboveThreshold = AwsHandler.getCloudWatchCPUUsage(InstanceManager.instances);
+
+            // If the number of instances above processing threshold is equal to the current fleet size
+            // then one of two things:
+            // - It's an occasional exception therefore we can ignore it, or
+            // - If its occurring regularly then our scaling algorithm isn't working as
+            // well as we expected. Therefore we need to slightly correct the cost of a typical request
+            // to reflect reality.
+            if(instancesAboveThreshold.size() == InstanceManager.getInstancesSize()) {
+                // Increase the cost of the request
+                if(currentToleranceOnExceededThreshold >= Configs.COST_CORRECTION_TOLERANCE) {
+                    currentToleranceOnExceededThreshold = 0;
+                    Configs.increaseCostCorrection();
+                    System.out.println("[Auto Scaler] Cloudwatch CPU observations concluded that the CPU usage threshold is constantly being exceeded, therefore it's increasing the cost of requests, new correction value: " + Configs.COST_CORRECTION_CPU_CURRENT);
+                } else {
+                    currentToleranceOnExceededThreshold++;
+                }
+            } else {
+                // Decrease the current cost correction of a request if the number of exceeded threshold is 0
+                // it will only decrease until the cost_correction variable reaches the base value and won't go lower
+                // than that.
+                if(currentToleranceOnExceededThreshold > 0) {
+                    currentToleranceOnExceededThreshold--;
+                    if(currentToleranceOnExceededThreshold == 0) {
+                        Configs.decreaseCostCorrection();
+                        System.out.println("[Auto Scaler] Cloudwatch CPU observations concluded that the CPU usage threshold is in normal values, therefore it's returning the cost of requests back to the base, new correction value: " + Configs.COST_CORRECTION_CPU_CURRENT);
+                    }
+                }
+            }
+
             cpuUsageTimestamp = currTime;
         }
     }
@@ -147,7 +179,7 @@ public class AutoScalerThread extends Thread {
     private static void doHealthCheck() {
         // Check the status of the VM's every 30 seconds
         if (System.currentTimeMillis() - lastLifeCheckTimestamp > Configs.HEALTH_CHECK_TIME) {
-            List<EC2Instance> instances = InstanceManager.getInstances();
+            List<EC2Instance> instances = InstanceManager.instances;
 
             for (EC2Instance instance : instances) {
                 String url = Configs.healthCheckUrlBuild(instance.getInstanceIp());
@@ -178,9 +210,12 @@ public class AutoScalerThread extends Thread {
      */
     private static boolean sendHealthCheck(String url) {
         try {
+            Duration dr = Duration.ofSeconds(3000);
+
             HttpClient client = HttpClient.newHttpClient();
+
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
+                    .uri(URI.create(url)).timeout(dr)
                     .build();
 
             String response = client.send(request, HttpResponse.BodyHandlers.ofString()).body();
@@ -228,6 +263,7 @@ public class AutoScalerThread extends Thread {
                         EC2Instance inst = new EC2Instance();
                         inst.setId(instanceId);
                         inst.setIp(ip);
+                        inst.setCreationTimestamp(0);   // Just to avoid the fresh instance process
                         InstanceManager.addInstance(inst);
                     }
                 } else {
@@ -257,6 +293,9 @@ public class AutoScalerThread extends Thread {
         return desynchronizedInstances;
     }
 
+    /**
+     *  Send HTTP request to health check endpoint of instance with ip @ip.
+     */
     private static boolean sendHealthCheckToDesyncInstance(String ip) {
         try {
             String url = Configs.healthCheckUrlBuild(ip);

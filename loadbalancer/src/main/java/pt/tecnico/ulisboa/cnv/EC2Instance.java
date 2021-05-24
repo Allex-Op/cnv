@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -32,9 +33,7 @@ public class EC2Instance {
 
     private AtomicLong currentCapacity = new AtomicLong(0);
 
-    private List<Job> runningJobs = new ArrayList<>();
-
-    private final Object jobsLock = new Object();
+    private ConcurrentHashMap<String, Job> runningJobs = new ConcurrentHashMap<>();
 
     private AtomicLong creationTimestamp = new AtomicLong(0);
 
@@ -62,7 +61,7 @@ public class EC2Instance {
             return result;
         } catch (Exception e) {
             System.out.println("[EC2 Instance] Failed obtaining result of request.");
-            return "WebServer failed to process the request :(".getBytes();
+            return null;
         }
     }
 
@@ -81,7 +80,7 @@ public class EC2Instance {
      *  client must wait for it to become available or the request will fail.
      */
     private void isInstanceFresh() {
-        if(System.currentTimeMillis() - creationTimestamp.get() < Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE) {
+        if((System.currentTimeMillis() - creationTimestamp.get()) < Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE) {
             try {
                 System.out.println("[EC2 Instance] Instance freshly created, waiting 20 seconds before sending the request..." + Instant.now().getEpochSecond());
                 Thread.sleep(Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE);
@@ -105,12 +104,10 @@ public class EC2Instance {
      *  Decision taken by the load balancer.
      */
     public void addJob(Job job) {
-        synchronized (jobsLock) {
-            numberOfRequests.incrementAndGet();
-            currentCapacity.set(currentCapacity.get() + job.expectedCost);
-            System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
-            runningJobs.add(job);
-        }
+        numberOfRequests.incrementAndGet();
+        currentCapacity.set(currentCapacity.get() + job.expectedCost);
+        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
+        runningJobs.putIfAbsent(job.id, job);
     }
 
     /**
@@ -120,12 +117,11 @@ public class EC2Instance {
      *
      */
     public void removeJob(Job job) {
-        synchronized (jobsLock) {
-            numberOfRequests.decrementAndGet();
-            runningJobs.remove(job);
-            currentCapacity.set(currentCapacity.get() - job.expectedCost);
-            System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
-        }
+        runningJobs.remove(job.id);
+        numberOfRequests.decrementAndGet();
+        currentCapacity.set(currentCapacity.get() - job.expectedCost);
+        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
+
     }
 
     /**
@@ -133,23 +129,21 @@ public class EC2Instance {
      * that have an higher cost than 5% of the VM capacity.
      */
     public void queryExecutedMetrics() {
-        synchronized (jobsLock) {
-            for (Job runningJob : runningJobs) {
-                if (runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
-                    String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
-                    System.out.println("[EC2 Instance] Sending executed metrics query to: " + url);
+        for (Job runningJob : runningJobs.values()) {
+            if (runningJob.expectedCost > Configs.LIGHT_REQUEST_THRESHOLD) {
+                String url = Configs.urlBuild(getInstanceIp()) + "metrics?requestId=" + runningJob.id;
+                System.out.println("[EC2 Instance] Sending executed metrics query to: " + url);
 
-                    String response = sendExecutedMetricsHttpRequest(url);
+                String response = sendExecutedMetricsHttpRequest(url);
 
-                    // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
-                    // for some reason. (It could be that the thread stats are not existent anymore for this job or
-                    // wasn't able to contact the web server)
-                    if (response.equals("")) {
-                        continue;
-                    } else {
-                        System.out.println("[EC2 Instance] Received current metrics for requestId=" + runningJob.id);
-                        runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
-                    }
+                // If response is empty then the web server handler or sendExecutedMetricsHttpRequest failed
+                // for some reason. (It could be that the thread stats are not existent anymore for this job or
+                // wasn't able to contact the web server)
+                if (response.equals("")) {
+                    continue;
+                } else {
+                    System.out.println("[EC2 Instance] Received current metrics for requestId=" + runningJob.id);
+                    runningJob.updateExecutedMetrics(new ExecutedMetrics(response));
                 }
             }
         }
@@ -181,15 +175,13 @@ public class EC2Instance {
      * Returns the capacity of the web server after the jobs that
      * are about to complete, complete.
      */
-    public synchronized long checkIfAnyJobIsAlmostDone() {
-        synchronized (jobsLock) {
-            long newCapacityAfterFreedJobs = currentCapacity.get();
-            for (Job runningJob : runningJobs) {
-                if (runningJob.isJobAlmostDone())
-                    newCapacityAfterFreedJobs -= runningJob.expectedCost;
-            }
-            return newCapacityAfterFreedJobs;
+    public synchronized long getCapacityAfterConcludingJobsFinish() {
+        long newCapacityAfterFreedJobs = currentCapacity.get();
+        for (Job runningJob : runningJobs.values()) {
+            if (runningJob.isJobAlmostDone())
+                newCapacityAfterFreedJobs -= runningJob.expectedCost;
         }
+        return newCapacityAfterFreedJobs;
     }
 
     /**
@@ -282,5 +274,9 @@ public class EC2Instance {
      */
     public void incrementFailedHealthChecks() {
         failedHealthChecks.incrementAndGet();
+    }
+
+    public void setCreationTimestamp(long creationTimestamp) {
+        this.creationTimestamp.set(creationTimestamp);
     }
 }

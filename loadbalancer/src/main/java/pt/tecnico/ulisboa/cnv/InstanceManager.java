@@ -12,14 +12,10 @@ public class InstanceManager {
     // Instances list is an extremely concurred structure by the auto-scaler
     // and every new request that comes and need distribution, therefore it needs to
     // have its access controlled.
-    private static List<EC2Instance> instances = new ArrayList<>();
+    public static List<EC2Instance> instances = new ArrayList<>();
 
     // Lock used to synchronize access to the instances list.
     public static final Object instancesLock = new Object();
-
-    public static List<EC2Instance> getInstances() {
-        return instances;
-    }
 
     public static int getInstancesSize() {
         synchronized (instancesLock) {
@@ -30,18 +26,6 @@ public class InstanceManager {
     public static void addInstance(EC2Instance instance) {
         synchronized (instancesLock) {
             instances.add(instance);
-        }
-    }
-
-    public static void removeInstance(EC2Instance instance) {
-        synchronized (instancesLock) {
-            instances.remove(instance);
-        }
-    }
-
-    public static EC2Instance getInstance(int idx) {
-        synchronized (instancesLock) {
-            return instances.get(idx);
         }
     }
 
@@ -86,7 +70,7 @@ public class InstanceManager {
                 if(instance.isMarkedForTermination())
                     continue;
 
-                if ( (instance.checkIfAnyJobIsAlmostDone() + job.expectedCost) < Configs.VM_PROCESSING_CAPACITY) {
+                if ( (instance.getCapacityAfterConcludingJobsFinish() + job.expectedCost) < Configs.VM_PROCESSING_CAPACITY) {
                     System.out.println("[Instance Manager] Found instance: " + instance.getInstanceId() +", that will soon have enough resources to process job: " + job.id);
                     return instance;
                 }

@@ -7,13 +7,29 @@ public class LbStrategy extends InstanceManager {
      *  algorithms.
      */
     public static byte[] distributeRequest(Job job, String query) {
-        EC2Instance ec2 = selectInstance(job);
-        System.out.println("[Lb Strategy] Found an available instance to process the request: " + job.id);
+        byte[] result;
+        int tries = 0;
 
-        byte[] result = ec2.executeRequest(job, query);
-        ec2.removeJob(job);
+        // Sometimes an request can fail being processed by an instance, if thats the case
+        // pick a new instance and retry. A maximum number of attemps is defined, if after that
+        // it still fails, it returns error.
+        while(true) {
+            EC2Instance ec2 = selectInstance(job);
+            System.out.println("[Lb Strategy] Found an available instance to process the request: " + job.id);
 
-        return result;
+            result = ec2.executeRequest(job, query);
+            ec2.removeJob(job);
+
+            if(result != null) {
+                return result;
+            } else {
+                System.out.println("[Lb Strategy] Web Server Instance: " + ec2.getInstanceId() + " failed processing the request: " + job.id + ", trying again... attempts: " + tries);
+                tries++;
+
+                if(tries >= Configs.MAX_TRIES_SENDING_REQUEST)
+                    return "Max tries exceeded for sending the request :(".getBytes();
+            }
+        }
     }
 
     /**

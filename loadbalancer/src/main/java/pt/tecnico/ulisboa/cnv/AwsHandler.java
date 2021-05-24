@@ -184,14 +184,17 @@ public class AwsHandler {
     /**
      *  Obtains the CPU Usage for all running instances
      *  calculated by the average on 60 seconds.
+     * @return
      */
-    public static void getCloudWatchCPUUsage(List<EC2Instance> instances) {
+    public static List<String> getCloudWatchCPUUsage(List<EC2Instance> instances) {
         long offsetInMilliseconds = 1000 * 60 * 10;
         Dimension instanceDimension = new Dimension();
         instanceDimension.setName("InstanceId");
 
         List<Dimension> dims = new ArrayList<>();
         dims.add(instanceDimension);
+
+        List<String> instancesAboveThreshold = new ArrayList<>();
 
         for (EC2Instance instance : instances) {
             String name = instance.getInstanceId();
@@ -210,9 +213,17 @@ public class AwsHandler {
 
             List<Datapoint> datapoints = getMetricStatisticsResult.getDatapoints();
             for (Datapoint datapoint : datapoints) {
-                System.out.println("[AwsHandler] CPU Utilization Average for instance " + name + " : " + datapoint.getAverage());
+                double average = datapoint.getAverage();
+                System.out.println("[AwsHandler] CPU Utilization Average for instance " + name + " : " + average);
+
+                // If the instance processing percentage is above the defined threshold note that
+                // and return it to the auto-scaler.
+                if(average > Configs.ABOVE_PROCESSING_THRESHOLD)
+                    instancesAboveThreshold.add(name);
             }
         }
+
+        return instancesAboveThreshold;
     }
 
     /**

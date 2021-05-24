@@ -1,8 +1,3 @@
-Todo:
-- o startup do lb cria sempre 2 instâncias, pq n verifica no aws se ja existem
-- cloudwatch get some random cpu usage stats na autoscaler thread
-
-
 Could get some improvements:
 - findMostSimilar no storageAccess no range de viewport
 - AutoScaler decideAction
@@ -13,25 +8,13 @@ Could get some improvements:
 
 
 Testar:
-- cpu usage 
-- executedMetrics
-- startup com vm's ja existentes
-- desynchronized instances
+- max attempts request e retry
+- cpu increase e decrease cost
 
 
 weird behavior:
-- algoritmo de decisão do auto-scaler esta a criar instâncias quando n deve:
-    - o algoritmo ta demasiado sensivel mal passe 1 vez do threshold cria outra VM, mas n devia, devia ver se a outras livres
-    e apenas ai criar. CHECKAR o getsystemstatus e do action
-
-
-- Existe possibilidade de dead lock entre 2 thread que estejam a espera do lock da instance e do lock das runningjobs,
-tenho que garantir que o jobsLock so é usado em operações simples que n chamem outras que tenham locks
-
-
-
-A aulo-scaler thread devia ter mais prioridade sobre o obtaining das instances "lock" pequenos requests podem atrasar
-o auto-scaling, logo apanha o lock ao inicio. Mover as funções de volta para o seu lugar do instanceManager
+- alguns pedidos n estao a ser instantaneamente processados, provavelmente algum lock de merda a atrasar as cenas 
+- continua a haver concurrent modification exception na thread do auto-scaler 
 
 
 Report:
@@ -39,13 +22,9 @@ Report:
 - bloqueio de smaller requests no distribute devido ao sleep
 - n vale a pena pedir as metricas de pedidos pequenos é overhead desnecessário
 - apenas reutiliza as vms running no aws se o health check suceder.
+- A aulo-scaler thread devia ter mais prioridade sobre o obtaining das instances "lock" pequenos requests podem atrasar
 
 
-Implementação classe LbStrategy (delete instance e distribute) + leitura/escrita MSS com os algoritmos para encontrar o mais semelhante + periodic check nas metricas do web server (piggyback? cada pedido que chega verifica last check)
-
-
-. O web server esta bounded a versão do sdk devido a ser java 7
-. Os requestArguments (params + viewport) assume que os parametros são corretos e vêm na ordem correta
 
 javac pt/ulisboa/tecnico/cnv/server/WebServer.java
 

@@ -11,7 +11,7 @@ public class AutoScaler extends InstanceManager {
      * It increases the number of running web
      * servers that process requests.
      */
-    public static void increaseFleet(int count) {
+    protected static void increaseFleet(int count) {
         int fleetSize = InstanceManager.getInstancesSize();
         if(fleetSize >= Configs.MAXIMUM_FLEET_CAPACITY) {
             System.out.println("[Auto Scaler] Can't increase fleet power further. Reached max capacity.");
@@ -36,11 +36,11 @@ public class AutoScaler extends InstanceManager {
      * To mark for termination it will check which instances
      * are below 25% capacity.
      */
-    public static void markForTermination(int marks) {
+    protected static void markForTermination(int marks) {
         int currMarked = 0;
         int fleetSize = InstanceManager.getInstancesSize();
 
-        for (EC2Instance instance : InstanceManager.getInstances()) {
+        for (EC2Instance instance : InstanceManager.instances) {
             if(instance.belowProcessingThreshold()) {
 
                 // Constraint check
@@ -79,7 +79,7 @@ public class AutoScaler extends InstanceManager {
      *
      *  The 3 possible results are: NO_ACTION, INCREASE_FLEET, DECREASE_FLEET
      */
-    public static AutoScalerAction getSystemStatus() {
+    protected static AutoScalerAction getSystemStatus() {
         int fleetSize = InstanceManager.getInstancesSize();
 
         if(fleetSize < Configs.MINIMUM_FLEET_CAPACITY)
@@ -88,11 +88,14 @@ public class AutoScaler extends InstanceManager {
         int instancesAboveThreshold = 0;
         int instancesBelowThreshold = 0;
 
-        List<EC2Instance> instances = InstanceManager.getInstances();
+        List<EC2Instance> instances = InstanceManager.instances;
         for (EC2Instance instance : instances) {
             if(instance.aboveProcessingThreshold()) {
+
                 // Before considering the VM as overwhelmed, check if it has any job that is almost complete
-                if(instance.checkIfAnyJobIsAlmostDone() < Configs.MAX_THRESHOLD_CAPACITY)
+                // only consider the instance as overwhelmed if the jobs that are about to conclude still wont
+                // release enough capacity to be below the threshold capacity.
+                if(instance.getCapacityAfterConcludingJobsFinish() > Configs.MAX_THRESHOLD_CAPACITY)
                     instancesAboveThreshold++;
             } else if(instance.belowProcessingThreshold()) {
                 instancesBelowThreshold++;
@@ -106,8 +109,11 @@ public class AutoScaler extends InstanceManager {
      *  Based on the gathered information it will decide what action it should do.
      *  TODO:This code is kinda sketchy, maybe it should be revised in the future....
      */
-    public static AutoScalerAction decideAction(int fleetSize, int instancesAboveThreshold, int instancesBelowThreshold) {
+    protected static AutoScalerAction decideAction(int fleetSize, int instancesAboveThreshold, int instancesBelowThreshold) {
         if(fleetSize == Configs.MINIMUM_FLEET_CAPACITY) {
+            System.out.println("instances above threshold:" + instancesAboveThreshold);
+            System.out.println("instances below threshold:" + instancesBelowThreshold);
+            System.out.println("fleet size:" + fleetSize);
 
             // Only command the creation of a new VM if all vm's are above threshold
             if((fleetSize - instancesAboveThreshold) == 0) {
@@ -120,7 +126,7 @@ public class AutoScaler extends InstanceManager {
 
         } else if (fleetSize > Configs.MINIMUM_FLEET_CAPACITY) {
             if (instancesBelowThreshold > 1) {
-                return new AutoScalerAction(AutoScalerActionEnum.DECREASE_FLEET, instancesBelowThreshold - (instancesBelowThreshold - 1));
+                return new AutoScalerAction(AutoScalerActionEnum.DECREASE_FLEET, 1);
             } else if (instancesAboveThreshold == fleetSize) {
                 return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, 1);
             }
