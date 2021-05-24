@@ -40,11 +40,7 @@ public class AutoScaler extends InstanceManager {
         int currMarked = 0;
         int fleetSize = InstanceManager.getInstancesSize();
 
-        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-            EC2Instance instance = instances[i];
-            if(instance == null)
-                continue;
-
+        for (EC2Instance instance : instances.values()) {
             if(instance.belowProcessingThreshold()) {
 
                 // Constraint check
@@ -92,11 +88,7 @@ public class AutoScaler extends InstanceManager {
         int instancesAboveThreshold = 0;
         int instancesBelowThreshold = 0;
 
-        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-            EC2Instance instance = instances[i];
-            if(instance == null)
-                continue;
-
+        for (EC2Instance instance : instances.values()) {
             if(instance.aboveProcessingThreshold()) {
 
                 // Before considering the VM as overwhelmed, check if it has any job that is almost complete
@@ -122,8 +114,8 @@ public class AutoScaler extends InstanceManager {
             System.out.println("instances below threshold:" + instancesBelowThreshold);
             System.out.println("fleet size:" + fleetSize);
 
-            // Only command the creation of a new VM if all vm's are above threshold
-            if((fleetSize - instancesAboveThreshold) == 0) {
+            // Only command the creation of a new VM if almost all vm's are above threshold
+            if((fleetSize - instancesAboveThreshold) < Configs.MINIMUM_FREE_INSTANCES) {
                 return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, 1);
             } else {
                 // The below threshold shouldn't be counted in the case of minimium_fleet_capacity
@@ -132,9 +124,11 @@ public class AutoScaler extends InstanceManager {
             }
 
         } else if (fleetSize > Configs.MINIMUM_FLEET_CAPACITY) {
-            if (instancesBelowThreshold > 1) {
+            // The auto-scaler should try having at least 2 instances free in-case a burst of request comes
+            // not having to wait or at least avoiding the delay of startup of a new instance.
+            if (instancesBelowThreshold > Configs.MINIMUM_FREE_INSTANCES) {
                 return new AutoScalerAction(AutoScalerActionEnum.DECREASE_FLEET, 1);
-            } else if (instancesAboveThreshold == fleetSize) {
+            } else if ((fleetSize - instancesAboveThreshold) < Configs.MINIMUM_FREE_INSTANCES) {
                 return new AutoScalerAction(AutoScalerActionEnum.INCREASE_FLEET, 1);
             }
         }

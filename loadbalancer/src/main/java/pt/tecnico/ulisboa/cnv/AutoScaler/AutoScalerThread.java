@@ -50,19 +50,16 @@ public class AutoScalerThread extends Thread {
 
                 // Obtaining the lock once instead individually for each operation
                 // as it can slow down the auto-scaler thread too much...
-                synchronized (InstanceManager.instancesLock) {
-                    synchronizeAwsInstances();
-                    terminateMarkedInstances();
-                    doHealthCheck();
-                    getExecutedMetrics();
-                    getCPUUsage();
-                    observeStatusAndAct();
-                }
+                synchronizeAwsInstances();
+                terminateMarkedInstances();
+                doHealthCheck();
+                getExecutedMetrics();
+                getCPUUsage();
+                observeStatusAndAct();
             } catch(InterruptedException e) {
                 System.out.println("[Auto Scaler] Thread interrupted.");
             } catch(Exception e) {
                 System.out.println("[Auto Scaler] Exception occurred in auto-scaler thread: " + e.getMessage());
-                throw e;
             }
         }
     }
@@ -95,15 +92,11 @@ public class AutoScalerThread extends Thread {
         // this can happen in some buggy scenarios where instances start, they have no jobs and are marked
         // for termination. Never actually terminating.
 
-        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-            EC2Instance instance = instances[i];
-            if(instance == null)
-                continue;
-
+        for (EC2Instance instance : instances.values()) {
             if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
                 System.out.println("[Auto Scaler] Manually terminating instance without jobs that is marked for termination.");
                 instance.terminateInstance();
-                instances[i] = null;
+                instances.remove(instance.getInstanceId());
             }
         }
     }
@@ -123,18 +116,12 @@ public class AutoScalerThread extends Thread {
         // The first request should be 30 seconds after startup, but after that it should be every
         // time the auto-scaler thread wakes up.
         if(!recentStartExecutedMetrics) {
-            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-                EC2Instance instance = instances[i];
-                if (instance == null)
-                    continue;
+            for (EC2Instance instance : instances.values()) {
                 instance.queryExecutedMetrics();
             }
         } else {
             if(System.currentTimeMillis() - startupTimestamp > Configs.EXECUTED_METRICS_FIRST_TIME_CHECK) {
-                for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-                    EC2Instance instance = instances[i];
-                    if (instance == null)
-                        continue;
+                for (EC2Instance instance : instances.values()) {
                     instance.queryExecutedMetrics();
                 }
 
@@ -193,9 +180,10 @@ public class AutoScalerThread extends Thread {
         // Check the status of the VM's every 30 seconds
         if (System.currentTimeMillis() - lastLifeCheckTimestamp > Configs.HEALTH_CHECK_TIME) {
 
-            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-                EC2Instance instance = instances[i];
-                if(instance == null)
+            for (EC2Instance instance : instances.values()) {
+                // Don't send an health check if instance is fresh or auto-scaler thread
+                // will be delayed waiting for the answer...
+                if(instance.isFreshInstance())
                     continue;
 
                 String url = Configs.healthCheckUrlBuild(instance.getInstanceIp());
@@ -208,7 +196,7 @@ public class AutoScalerThread extends Thread {
                     if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
                         System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
 
-                        instances[i] = null;
+                        instances.remove(instance.getInstanceId());
                     }
                 } else {
                     instance.setFailedHealthChecks(0);

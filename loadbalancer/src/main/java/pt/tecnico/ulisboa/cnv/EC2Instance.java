@@ -5,9 +5,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,7 +43,7 @@ public class EC2Instance {
      *  for its response.
      */
     public byte[] executeRequest(Job job, String query) {
-        isInstanceFresh();
+        waitIfFreshInstance();
 
         try {
             String url = Configs.urlBuild(getInstanceIp()) + "scan?" + query + "&requestId=" + job.id;
@@ -60,7 +57,7 @@ public class EC2Instance {
             byte[] result = client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
             return result;
         } catch (Exception e) {
-            System.out.println("[EC2 Instance] Failed obtaining result of request.");
+            System.out.println("[EC2 Instance] Failed obtaining result of request: " + e.getMessage());
             return null;
         }
     }
@@ -79,8 +76,8 @@ public class EC2Instance {
      *  When a new requests demands the creation of a VM, the VM is not instantly ready and the
      *  client must wait for it to become available or the request will fail.
      */
-    private void isInstanceFresh() {
-        if((System.currentTimeMillis() - creationTimestamp.get()) < Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE) {
+    private void waitIfFreshInstance() {
+        if(isFreshInstance()) {
             try {
                 System.out.println("[EC2 Instance] Instance freshly created, waiting 20 seconds before sending the request..." + Instant.now().getEpochSecond());
                 Thread.sleep(Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE);
@@ -89,6 +86,10 @@ public class EC2Instance {
                 System.out.println("[EC2 Instance] Waiting thread interrupted...");
             }
         }
+    }
+
+    public boolean isFreshInstance() {
+        return (System.currentTimeMillis() - creationTimestamp.get()) < Configs.WAIT_TIME_BEFORE_INSTANCE_AVAILABLE;
     }
 
     /**
@@ -106,7 +107,7 @@ public class EC2Instance {
     public void addJob(Job job) {
         numberOfRequests.incrementAndGet();
         currentCapacity.set(currentCapacity.get() + job.expectedCost);
-        System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
+        //System.out.println("[EC2 Instance] A new job with expected cost " + job.expectedCost + " was assigned to the VM with ID: " + id + ". The new current capacity is: " + currentCapacity);
         runningJobs.putIfAbsent(job.id, job);
     }
 
@@ -120,8 +121,7 @@ public class EC2Instance {
         runningJobs.remove(job.id);
         numberOfRequests.decrementAndGet();
         currentCapacity.set(currentCapacity.get() - job.expectedCost);
-        System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
-
+        //System.out.println("[EC2 Instance] A Job is being removed from the instance with id: " + id + ", the job expected cost was:" + job.expectedCost + ". The new current capacity is: " + currentCapacity);
     }
 
     /**

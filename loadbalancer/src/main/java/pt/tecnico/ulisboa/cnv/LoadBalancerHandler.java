@@ -13,6 +13,7 @@ public class LoadBalancerHandler implements HttpHandler {
     public void handle(HttpExchange t) throws IOException {
         final String query = t.getRequestURI().getQuery();
 
+        System.out.println();
         RequestArguments args = new RequestArguments(query);
         Job job = new Job(args);
         System.out.println("[LB Handler] New job with id: " + job.id + ", it's expected cost is: " + job.expectedCost);

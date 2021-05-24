@@ -23,11 +23,16 @@ public class LbStrategy extends InstanceManager {
             if(result != null) {
                 return result;
             } else {
-                System.out.println("[Lb Strategy] Web Server Instance: " + ec2.getInstanceId() + " failed processing the request: " + job.id + ", trying again... attempts: " + tries);
                 tries++;
+                System.out.println("[Lb Strategy] Web Server Instance: " + ec2.getInstanceId() + " failed processing the request: " + job.id + ", trying again... attempts: " + tries);
 
                 if(tries >= Configs.MAX_TRIES_SENDING_REQUEST)
-                    return "Max tries exceeded for sending the request :(".getBytes();
+                    return ErrorMessages.MAX_TRIES_EXCEEDED_FOR_SENDING_REQUEST.getBytes();
+
+                // Sleep 3 seconds before retrying...
+                try {
+                    Thread.sleep(5000);
+                } catch(InterruptedException e) {}
             }
         }
     }

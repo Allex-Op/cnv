@@ -198,11 +198,7 @@ public class AwsHandler {
 
         List<String> instancesAboveThreshold = new ArrayList<>();
 
-        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
-            EC2Instance instance = instances[i];
-            if(instance == null)
-                continue;
-
+        for (EC2Instance instance : instances.values()) {
             String name = instance.getInstanceId();
             instanceDimension.setValue(name);
 

@@ -13,8 +13,7 @@ Testar:
 
 
 weird behavior:
-- alguns pedidos n estao a ser instantaneamente processados, provavelmente algum lock de merda a atrasar as cenas 
-- continua a haver concurrent modification exception na thread do auto-scaler 
+- A quantidade de entradas na bd esta a atrasar a auto-scaler thread 
 
 
 Report:

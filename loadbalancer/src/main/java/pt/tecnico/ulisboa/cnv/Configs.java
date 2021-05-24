@@ -40,6 +40,7 @@ public class Configs {
     // Auto-Scaler configs
     public final static int MINIMUM_FLEET_CAPACITY = 2;
     public final static int MAXIMUM_FLEET_CAPACITY = 6;
+    public final static int MINIMUM_FREE_INSTANCES = 2; // At least 2 instances should be free at any moment (except if max fleet size)
     public final static double BELOW_PROCESSING_THRESHOLD = 0.10;
     public final static double ABOVE_PROCESSING_THRESHOLD = 0.85;
 
@@ -64,7 +65,7 @@ public class Configs {
 
 
     // Job configs
-    public final static double PERCENTAGE_OF_JOB_COMPLETED = 0.75;
+    public final static double PERCENTAGE_OF_JOB_COMPLETED = 0.9;
 
     // Instance configs
     public static String urlBuild(String ip) {
