@@ -2,36 +2,50 @@ package pt.tecnico.ulisboa.cnv;
 
 import com.amazonaws.services.ec2.model.Instance;
 
-import java.util.*;
-
 /**
  * Class deals with the concurrent management of the
  * instances.
  */
 public class InstanceManager {
-    // Instances list is an extremely concurred structure by the auto-scaler
+    // Instances array is an extremely concurred structure by the auto-scaler
     // and every new request that comes and need distribution, therefore it needs to
     // have its access controlled.
-    public static List<EC2Instance> instances = new ArrayList<>();
+    public static EC2Instance[] instances = new EC2Instance[Configs.MAXIMUM_FLEET_CAPACITY];
 
     // Lock used to synchronize access to the instances list.
     public static final Object instancesLock = new Object();
 
     public static int getInstancesSize() {
         synchronized (instancesLock) {
-            return instances.size();
+            int count = 0;
+
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                if(instances[i] != null)
+                    count++;
+            }
+
+            return count;
         }
     }
 
     public static void addInstance(EC2Instance instance) {
         synchronized (instancesLock) {
-            instances.add(instance);
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                if(instances[i] == null) {
+                    instances[i] = instance;
+                    break;
+                }
+            }
         }
     }
 
     public static EC2Instance searchInstanceWithoutJobs() {
         synchronized (instancesLock) {
-            for (EC2Instance instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 if(instance.getNumberOfRequests() == 0)
                     return instance;
             }
@@ -45,7 +59,11 @@ public class InstanceManager {
     public static EC2Instance searchInstanceWithEnoughResources(Job job) {
         synchronized (instancesLock) {
             // First search for an instance that has resources to answer the request
-            for (EC2Instance instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 if(instance.isMarkedForTermination())
                     continue;
 
@@ -66,7 +84,11 @@ public class InstanceManager {
     public static EC2Instance searchInstanceWithJobAlmostFinished(Job job) {
         synchronized (instancesLock) {
             // If there is no instance to answer the request, see if any instance is almost done completing a job
-            for (EC2Instance instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 if(instance.isMarkedForTermination())
                     continue;
 
@@ -86,7 +108,11 @@ public class InstanceManager {
     public static int getNumberOfInstancesMarkedForTermination() {
         synchronized (instancesLock) {
             int count = 0;
-            for (EC2Instance instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 if(instance.isMarkedForTermination())
                     count++;
             }
@@ -105,7 +131,11 @@ public class InstanceManager {
         synchronized (instancesLock) {
             String instanceId = instance.getInstanceId();
 
-            for (EC2Instance ec2Instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance ec2Instance = instances[i];
+                if(ec2Instance == null)
+                    continue;
+
                 if(ec2Instance.getInstanceId().equals(instanceId))
                     return true;
             }
@@ -120,13 +150,30 @@ public class InstanceManager {
      */
     protected static EC2Instance getInstanceWithLowestCapacity() {
         synchronized (instancesLock) {
-            EC2Instance lowest = instances.get(0);
-            for (EC2Instance instance : instances) {
+            EC2Instance lowest = findFirstInstance();
+
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 if(instance.getCurrentCapacity() < lowest.getCurrentCapacity())
                     lowest = instance;
             }
 
             return lowest;
+        }
+    }
+
+
+    private static EC2Instance findFirstInstance() {
+        synchronized (instancesLock) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance != null)
+                    return instance;
+            }
+            return null;
         }
     }
 }

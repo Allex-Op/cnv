@@ -26,6 +26,8 @@ import pt.tecnico.ulisboa.cnv.model.DbEntry;
 
 import java.util.*;
 
+import static pt.tecnico.ulisboa.cnv.InstanceManager.instances;
+
 /**
  * Contains the information to interact
  * with the AWS API.
@@ -186,7 +188,7 @@ public class AwsHandler {
      *  calculated by the average on 60 seconds.
      * @return
      */
-    public static List<String> getCloudWatchCPUUsage(List<EC2Instance> instances) {
+    public static List<String> getCloudWatchCPUUsage() {
         long offsetInMilliseconds = 1000 * 60 * 10;
         Dimension instanceDimension = new Dimension();
         instanceDimension.setName("InstanceId");
@@ -196,7 +198,11 @@ public class AwsHandler {
 
         List<String> instancesAboveThreshold = new ArrayList<>();
 
-        for (EC2Instance instance : instances) {
+        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+            EC2Instance instance = instances[i];
+            if(instance == null)
+                continue;
+
             String name = instance.getInstanceId();
             instanceDimension.setValue(name);
 

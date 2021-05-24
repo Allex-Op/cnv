@@ -40,7 +40,11 @@ public class AutoScaler extends InstanceManager {
         int currMarked = 0;
         int fleetSize = InstanceManager.getInstancesSize();
 
-        for (EC2Instance instance : InstanceManager.instances) {
+        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+            EC2Instance instance = instances[i];
+            if(instance == null)
+                continue;
+
             if(instance.belowProcessingThreshold()) {
 
                 // Constraint check
@@ -88,8 +92,11 @@ public class AutoScaler extends InstanceManager {
         int instancesAboveThreshold = 0;
         int instancesBelowThreshold = 0;
 
-        List<EC2Instance> instances = InstanceManager.instances;
-        for (EC2Instance instance : instances) {
+        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+            EC2Instance instance = instances[i];
+            if(instance == null)
+                continue;
+
             if(instance.aboveProcessingThreshold()) {
 
                 // Before considering the VM as overwhelmed, check if it has any job that is almost complete

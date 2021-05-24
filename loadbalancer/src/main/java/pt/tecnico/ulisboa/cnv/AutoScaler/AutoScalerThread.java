@@ -15,6 +15,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static pt.tecnico.ulisboa.cnv.InstanceManager.instances;
+
 
 public class AutoScalerThread extends Thread {
     @Override
@@ -92,13 +94,16 @@ public class AutoScalerThread extends Thread {
         // Check if there are any instances marked for termination without jobs, if so terminate them
         // this can happen in some buggy scenarios where instances start, they have no jobs and are marked
         // for termination. Never actually terminating.
-        List<EC2Instance> instances = InstanceManager.instances;
 
-        for (EC2Instance instance : instances) {
+        for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+            EC2Instance instance = instances[i];
+            if(instance == null)
+                continue;
+
             if(instance.isMarkedForTermination() && instance.getCurrentCapacity() == 0) {
                 System.out.println("[Auto Scaler] Manually terminating instance without jobs that is marked for termination.");
                 instance.terminateInstance();
-                instances.remove(instance);
+                instances[i] = null;
             }
         }
     }
@@ -118,12 +123,20 @@ public class AutoScalerThread extends Thread {
         // The first request should be 30 seconds after startup, but after that it should be every
         // time the auto-scaler thread wakes up.
         if(!recentStartExecutedMetrics) {
-            for (EC2Instance instance : InstanceManager.instances)
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if (instance == null)
+                    continue;
                 instance.queryExecutedMetrics();
+            }
         } else {
             if(System.currentTimeMillis() - startupTimestamp > Configs.EXECUTED_METRICS_FIRST_TIME_CHECK) {
-                for (EC2Instance instance : InstanceManager.instances)
+                for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                    EC2Instance instance = instances[i];
+                    if (instance == null)
+                        continue;
                     instance.queryExecutedMetrics();
+                }
 
                 recentStartExecutedMetrics = false;
             }
@@ -137,7 +150,7 @@ public class AutoScalerThread extends Thread {
         long currTime = System.currentTimeMillis();
 
         if((currTime - cpuUsageTimestamp) > Configs.CPU_USAGE_CHECK_TIME) {
-            List<String> instancesAboveThreshold = AwsHandler.getCloudWatchCPUUsage(InstanceManager.instances);
+            List<String> instancesAboveThreshold = AwsHandler.getCloudWatchCPUUsage();
 
             // If the number of instances above processing threshold is equal to the current fleet size
             // then one of two things:
@@ -179,9 +192,12 @@ public class AutoScalerThread extends Thread {
     private static void doHealthCheck() {
         // Check the status of the VM's every 30 seconds
         if (System.currentTimeMillis() - lastLifeCheckTimestamp > Configs.HEALTH_CHECK_TIME) {
-            List<EC2Instance> instances = InstanceManager.instances;
 
-            for (EC2Instance instance : instances) {
+            for (int i = 0; i < Configs.MAXIMUM_FLEET_CAPACITY; i++) {
+                EC2Instance instance = instances[i];
+                if(instance == null)
+                    continue;
+
                 String url = Configs.healthCheckUrlBuild(instance.getInstanceIp());
 
                 System.out.println("[Auto Scaler] Sending health check message to: " + url);
@@ -192,7 +208,7 @@ public class AutoScalerThread extends Thread {
                     if (instance.getFailedHealthChecks() > Configs.MAX_FAILED_HEALTH_CHECKS) {
                         System.out.println("[Auto Scaler] Instance removed for failing the maximum health checks.");
 
-                        instances.remove(instance);
+                        instances[i] = null;
                     }
                 } else {
                     instance.setFailedHealthChecks(0);
