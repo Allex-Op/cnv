@@ -1,5 +1,10 @@
 package pt.tecnico.ulisboa.cnv;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 public class Configs {
     // Scanning strategies
     public final static String GRID_SCAN = "GRID_SCAN";
@@ -92,4 +97,27 @@ public class Configs {
     public final static long CPU_USAGE_CHECK_TIME = 1000 * 180; // Every 180 seconds
     public final static long EXECUTED_METRICS_FIRST_TIME_CHECK = 1000 * 30; // Executed 30 seconds after startup, but after that every 5s
 
+
+    // LoadBalancer (this code) instance id
+    public static String loadBalancerInstanceId = "BRRRAPPPP";   // Used to instruct the auto-scaler to not try to synchronize this instance as an EC2 web server instance
+
+    public static String initLbInstanceId() {
+        try {
+            String url = "http://169.254.169.254/latest/meta-data/instance-id";
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .build();
+
+            byte[] result = client.send(request, HttpResponse.BodyHandlers.ofByteArray()).body();
+            String instanceId = new String(result);
+            System.out.println("[Load Balancer] The instance id of the load balancer EC2 Instance is: " + instanceId);
+
+            return instanceId;
+        } catch(Exception e) {
+            System.out.println("[Load Balancer] Wasn't able to obtain the instance id of the load balancer EC2 instance.");
+            return "BRRAPPPP";
+        }
+    }
 }

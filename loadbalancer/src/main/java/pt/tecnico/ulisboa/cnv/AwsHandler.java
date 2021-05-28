@@ -252,8 +252,10 @@ public class AwsHandler {
 
         for (Instance instance : instances) {
             String state = instance.getState().getName();
+            String id = instance.getInstanceId();
 
-            if(state.equals("running")) {
+            // We dont want to count the load balancer as a running EC2 instance for our purposes
+            if(state.equals("running") && !id.equals(Configs.loadBalancerInstanceId)) {
                 runningInstances.add(instance);
             }
         }

@@ -11,10 +11,11 @@ public class LoadBalancerApplication {
         String SERVER = "0.0.0.0";
         int PORT = 8080;
 
-        // In case there are other non default parameters
+        // This parameters should be defined if running in AWS "java LoadBalancer 0.0.0.0 80"
         if(args.length == 2) {
             SERVER = args[0];
             PORT = Integer.parseInt(args[1]);
+            Configs.loadBalancerInstanceId = Configs.initLbInstanceId();
         }
 
         try {

@@ -1,34 +1,8 @@
-Could get some improvements:
-- findMostSimilar no storageAccess no range de viewport
-- AutoScaler decideAction
-- correctCost
-- selectInstance because of the multithreading block 
-- concurrência em geral
-- Entradas repetidas no MSS 
-
-
-Testar:
-- max attempts request e retry
-- cpu increase e decrease cost
-
-
-weird behavior:
-- A quantidade de entradas na bd esta a atrasar a auto-scaler thread 
-
-
-Report:
-- Mencionar problema de concurrência e como no metodo selectInstance vão haver instâncias que vão ficar presas a espera que podem ser menores que o atual....
-- bloqueio de smaller requests no distribute devido ao sleep
-- n vale a pena pedir as metricas de pedidos pequenos é overhead desnecessário
-- apenas reutiliza as vms running no aws se o health check suceder.
-- A aulo-scaler thread devia ter mais prioridade sobre o obtaining das instances "lock" pequenos requests podem atrasar
-
-
 
 javac pt/ulisboa/tecnico/cnv/server/WebServer.java
-
 javac pt/ulisboa/tecnico/cnv/deploy/EC2Launch.java
 java pt.ulisboa.tecnico.cnv.deploy.EC2Launch
+
 
 Local:
 v5: (portatil)
@@ -60,12 +34,37 @@ source /home/ec2-user/CNV/pt/ulisboa/tecnico/cnv/BIT/java-config-rnl-vm.sh
 cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "0.0.0.0" -port 8000 >> /home/ec2-user/webServer_logs.txt
 
 
+
+
+Remote load balancer:
+
+
+
+
+
+
+
+
+
+
 Testar load balancer requests: (Meter port 80 dps)
 leve:
 http://127.0.0.1:8080/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
 
 pesado:
 http://127.0.0.1:8080/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
