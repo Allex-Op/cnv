@@ -47,6 +47,7 @@ Remote load balancer:
 
 
 
+
 Testar load balancer requests: (Meter port 80 dps)
 leve:
 http://127.0.0.1:8080/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
