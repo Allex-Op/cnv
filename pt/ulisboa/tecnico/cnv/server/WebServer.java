@@ -157,125 +157,114 @@ public class WebServer {
 	static class MyHandler implements HttpHandler {
 		@Override
 		public void handle(final HttpExchange t) throws IOException {
+			// Get the query.
+			String query = t.getRequestURI().getQuery();
+
+			// Get request Id
+			int lastParameterIdx = query.lastIndexOf("&");
+			String lastParameterValue = query.substring(lastParameterIdx+1, query.length());
+			String requestId = lastParameterValue.split("=")[1];
+
+			System.out.println("> Forgot to add the option requestId");
+
+			// Remove request Id before being processed as its an unknown property and throws exception
+			query = query.substring(0, lastParameterIdx);
+
+			System.out.println("> Query:\t" + query);
+			System.out.println("> Request Id:\t" + requestId);
+
+
+			// Break it down into String[].
+			final String[] params = query.split("&");
+
+			/*
+			for(String p: params) {
+				System.out.println(p);
+			}
+			*/
+
+			// Store as if it was a direct call to SolverMain.
+			final ArrayList<String> newArgs = new ArrayList<>();
+			for (final String p : params) {
+				final String[] splitParam = p.split("=");
+
+				if(splitParam[0].equals("i")) {
+					splitParam[1] = WebServer.sap.getMapsDirectory() + "/" + splitParam[1];
+				}
+
+				newArgs.add("-" + splitParam[0]);
+				newArgs.add(splitParam[1]);
+
+				/*
+				System.out.println("splitParam[0]: " + splitParam[0]);
+				System.out.println("splitParam[1]: " + splitParam[1]);
+				*/
+			}
+
+			if(sap.isDebugging()) {
+				newArgs.add("-d");
+			}
+
+			// Store from ArrayList into regular String[].
+			final String[] args = new String[newArgs.size()];
+			int i = 0;
+			for(String arg: newArgs) {
+				args[i] = arg;
+				i++;
+			}
+			/*
+			for(String ar : args) {
+				System.out.println("ar: " + ar);
+			}
+			*/
+
+			// Create solver instance from factory.
+			final Solver s = SolverFactory.getInstance().makeSolver(args);
+
+			if(s == null) {
+				System.out.println("> Problem creating Solver. Exiting.");
+				System.exit(1);
+			}
+
+			// Write figure file to disk.
+			File responseFile = null;
 			try {
-				// Get the query.
-				String query = t.getRequestURI().getQuery();
+				// TODO: Register an association between the thread Id and request Id, so the Lb can later query
+				// the current executed metrics
+				long currentThreadId = Thread.currentThread().getId();
+				requestIdToThreadMap.putIfAbsent(requestId, currentThreadId);
 
-				// Get request Id
-				int lastParameterIdx = query.lastIndexOf("&");
-				String lastParameterValue = query.substring(lastParameterIdx + 1, query.length());
-				String requestId = lastParameterValue.split("=")[1];
+				// solve problem
+				final BufferedImage outputImg = s.solveImage();
 
-				System.out.println("> Forgot to add the option requestId");
+				// Log the metrics generated
+				logMetrics(newArgs, currentThreadId);
 
-				// Remove request Id before being processed as its an unknown property and throws exception
-				query = query.substring(0, lastParameterIdx);
+				// Remove requestId - threadId hashmap association
+				requestIdToThreadMap.remove(requestId);
 
-				System.out.println("> Query:\t" + query);
-				System.out.println("> Request Id:\t" + requestId);
+				final String outPath = WebServer.sap.getOutputDirectory();
 
-
-				// Break it down into String[].
-				final String[] params = query.split("&");
+				final String imageName = s.toString();
 
 				/*
-				for(String p: params) {
-					System.out.println(p);
-				}
-				*/
+				if(ap.isDebugging()) {
+					System.out.println("> Image name: " + imageName);
+				} */
 
-				// Store as if it was a direct call to SolverMain.
-				final ArrayList<String> newArgs = new ArrayList<>();
-				for (final String p : params) {
-					final String[] splitParam = p.split("=");
+				final Path imagePathPNG = Paths.get(outPath, imageName);
+				ImageIO.write(outputImg, "png", imagePathPNG.toFile());
 
-					if (splitParam[0].equals("i")) {
-						splitParam[1] = WebServer.sap.getMapsDirectory() + "/" + splitParam[1];
-					}
+				responseFile = imagePathPNG.toFile();
 
-					newArgs.add("-" + splitParam[0]);
-					newArgs.add(splitParam[1]);
-
-					/*
-					System.out.println("splitParam[0]: " + splitParam[0]);
-					System.out.println("splitParam[1]: " + splitParam[1]);
-					*/
-				}
-
-				if (sap.isDebugging()) {
-					newArgs.add("-d");
-				}
-
-				// Store from ArrayList into regular String[].
-				final String[] args = new String[newArgs.size()];
-				int i = 0;
-				for (String arg : newArgs) {
-					args[i] = arg;
-					i++;
-				}
-				/*
-				for(String ar : args) {
-					System.out.println("ar: " + ar);
-				}
-				*/
-
-				// Create solver instance from factory.
-				final Solver s = SolverFactory.getInstance().makeSolver(args);
-
-				if (s == null) {
-					System.out.println("> Problem creating Solver. Exiting.");
-					System.exit(1);
-				}
-
-				// Write figure file to disk.
-				File responseFile = null;
-				try {
-					// TODO: Register an association between the thread Id and request Id, so the Lb can later query
-					// the current executed metrics
-					long currentThreadId = Thread.currentThread().getId();
-					requestIdToThreadMap.putIfAbsent(requestId, currentThreadId);
-
-					// solve problem
-					final BufferedImage outputImg = s.solveImage();
-
-					// Log the metrics generated
-					logMetrics(newArgs, currentThreadId);
-
-					// Remove requestId - threadId hashmap association
-					requestIdToThreadMap.remove(requestId);
-
-					final String outPath = WebServer.sap.getOutputDirectory();
-
-					final String imageName = s.toString();
-
-					/*
-					if(ap.isDebugging()) {
-						System.out.println("> Image name: " + imageName);
-					} */
-
-					final Path imagePathPNG = Paths.get(outPath, imageName);
-					ImageIO.write(outputImg, "png", imagePathPNG.toFile());
-
-					responseFile = imagePathPNG.toFile();
-
-				} catch (final FileNotFoundException e) {
-					e.printStackTrace();
-				} catch (final IOException e) {
-					e.printStackTrace();
-				} catch (ClassNotFoundException e) {
-					e.printStackTrace();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-
-			} catch(Exception e) {
-				// Send response
-				t.sendResponseHeaders(200, response.length());
-				String response = "an error occurred in the web server and couldn't finish processing this request";
-				OutputStream osErr = t.getResponseBody();
-				osErr.write(response.getBytes());
-				osErr.close();
-				return;
+			} catch (final FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (final IOException e) {
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
 			}
 
 			// Send response to browser.
