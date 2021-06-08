@@ -26,7 +26,7 @@ public class Configs {
     public final static int VIEWPORT_AREA_1024 = 1024*1024;
 
     // AWS pt.tecnico.ulisboa.cnv.Configs - General
-    public final static String AMI_ID = "ami-0c46b75a086aada68";     // EC2 Instance w/ Web Server on Reboot
+    public final static String AMI_ID = "ami-09c47db1aa816a08e";     // EC2 Instance w/ Web Server on Reboot
     public final static String INSTANCE_TYPE = "t2.micro";
     public final static String ZONE_NAME = "us-east-2a";
     public final static String REGION_NAME = "us-east-2";

@@ -36,42 +36,15 @@ cd /home/ec2-user/CNV && java pt.ulisboa.tecnico.cnv.server.WebServer -address "
 
 
 
-Remote load balancer:
-
-
-
-
-
-
-
-
-
-
-
 Testar load balancer requests: (Meter port 80 dps)
 leve:
-http://127.0.0.1:8080/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
+http://127.0.0.1:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png
 
 pesado:
-http://127.0.0.1:8080/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png
+http://127.0.0.1:8000/scan?w=1024&h=1024&x0=0&x1=512&y0=0&y1=512&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_1024x1024_1.png
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+http://127.0.0.1:8080/scan?w=500&h=500&x0=125&x1=375&y0=125&y1=375&xS=251&yS=126&s=PROGRESSIVE_SCAN&i=RECURSIVE_SQUARE_YELLOW_500x500_1.png
 
 
 ab -n 1 -c 1 -s 500 "http://3.21.105.6:8000/scan?w=512&h=512&x0=0&x1=64&y0=0&y1=64&xS=1&yS=2&s=GRID_SCAN&i=SIMPLE_VORONOI_512x512_1.png"

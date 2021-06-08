@@ -9,7 +9,7 @@ import java.util.concurrent.Executors;
 public class LoadBalancerApplication {
     public static void main(String[] args) {
         String SERVER = "0.0.0.0";
-        int PORT = 8080;
+        int PORT = 8000;
 
         // This parameters should be defined if running in AWS "java LoadBalancer 0.0.0.0 80"
         if(args.length == 2) {
